@@ -1,4 +1,5 @@
-/* Sonor PDF Luxury — SHARED client-proposal chrome (v1.3.0, root master)
+/* Sonor PDF Luxury — SHARED client-proposal chrome (v1.3.1, root master)
+   v1.3.1 (2026-10-16, Takeover): cover() wraps a title that is still too wide at 38 pt onto two lines (eyebrow lifts with it).
    v1.3.0 (2026-10-16, Takeover): footerMode('minimal', project) — page-number-only running footer; rearPage() — the closing contact page
    (projects@ / service@ / phone / web / CEDIA). Adopted by Takeover + Service Contracts; classic footer stays the default elsewhere.
    v1.2.0 (2026-10-12, Survey): OPT-IN theme('neutral') — white paper + neutral greys for working documents (survey reports,
@@ -247,11 +248,15 @@
     // airy (v1.1.0, Service Contracts): title block starts higher and the info row sits lower, so a
     // title + subtitle + 3-cell info row breathe instead of stacking tight above the logo strip.
     var ty = opts.airy ? 630 : 672;
-    P.hline(M, M + 26, ty - 20, COL.GOLD, 1, 0.95);
-    P.tracked(String(opts.eyebrow || 'PROPOSAL').toUpperCase(), M + 34, ty - 24, 8.5, F.r, COL.GOLDL, 3.2);
     var title = opts.title || 'Proposal';
     var tsize = F.b.widthOfTextAtSize(title, 54) > (A4.w - M * 2) ? 38 : 54;
-    P.text(title, M - 2, ty + (tsize === 38 ? 12 : 0), tsize, F.b, COL.CREAM);
+    // v1.3.1 (2026-10-16, Takeover): a title still too wide at 38 pt wraps onto a second line ABOVE the baseline row instead of
+    // running off the frame (Woodbrook "Smart home system rescue & takeover"). Single-line titles render byte-identical.
+    var tl = (tsize === 38 && F.b.widthOfTextAtSize(title, 38) > (A4.w - M * 2)) ? wrap(title, F.b, 38, A4.w - M * 2).slice(0, 2) : [title];
+    var lift = (tl.length - 1) * 44;
+    P.hline(M, M + 26, ty - 20 - lift, COL.GOLD, 1, 0.95);
+    P.tracked(String(opts.eyebrow || 'PROPOSAL').toUpperCase(), M + 34, ty - 24 - lift, 8.5, F.r, COL.GOLDL, 3.2);
+    tl.forEach(function (ln, i) { P.text(ln, M - 2, ty + (tsize === 38 ? 12 : 0) - lift + i * 44, tsize, F.b, COL.CREAM); });
     if (opts.subtitle) P.text(opts.subtitle, M, ty + (opts.airy ? 68 : 62), 19, F.l, COL.GOLDL);
 
     var iy = opts.airy ? 766 : 772, cw = (A4.w - M * 2) / 3;
@@ -348,7 +353,7 @@
   }
 
   global.SonorPdfLuxury = {
-    __version: '1.3.0', theme: theme, THEMES: THEMES, footerMode: footerMode, rearPage: rearPage,
+    __version: '1.3.1', theme: theme, THEMES: THEMES, footerMode: footerMode, rearPage: rearPage,
     A4: A4, M: M, COL: COL, HOUSE: HOUSE, WA: WA,
     col: col, hexRgb: hexRgb, fadePngDataUrl: fadePngDataUrl,
     fetchBytes: fetchBytes, loadImage: loadImage,
