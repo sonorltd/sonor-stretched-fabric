@@ -1,4 +1,4 @@
-/* Sonor Stretched Fabric — wizard UI (v0.1.0)
+/* Sonor Stretched Fabric — wizard UI (v0.2.0)
    FabricApp — clones the Cinema Aesthetic / Seating app pattern:
    Intro → Rooms → System → Fabric → Layout → Summary. Writes ONLY fabric_configs; publishes
    projects.metadata.stretched_fabric_spec through the merge RPC (this app = the only writer of
@@ -27,6 +27,23 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function dbc() { try { return (global.__FABRIC_DB__ && global.__FABRIC_DB__.client) || (global.db && global.db.client) || null; } catch (e) { return null; } }
   function uid() { return 'r' + Math.random().toString(36).slice(2, 8); }
+  // v0.2.0 — the ONE WeQuote-linked mark (.wq-pill, data/sonor-components.css · SonorWQClient.pill 1.3.1). Internal build only —
+  // the client build (__FABRIC_CLIENT__) shows no WeQuote marks or warnings; never on the PDFs (those are drawn by fabric-pdf.js).
+  function wqPill(o) {
+    if (CLIENT) return '';
+    o = o || {};
+    var W = global.SonorWQClient;
+    if (W && W.pill) return W.pill(o);
+    var t = o.title ? ' title="' + esc(o.title) + '"' : '', cls = 'wq-pill' + (o.off ? ' wq-off' : '');
+    return o.href ? '<a class="' + cls + '" href="' + esc(o.href) + '" target="_blank" rel="noopener"' + t + '>WQ</a>' : '<span class="' + cls + '"' + t + '>WQ</span>';
+  }
+  function itemWqMark(it) {
+    if (CLIENT || !it) return '';
+    return it.wq && it.wq.product_id
+      ? ' ' + wqPill({ title: 'WeQuote product #' + it.wq.product_id + (it.wq.description ? ' — ' + it.wq.description : '') })
+      : ' ' + wqPill({ off: true, title: 'No WeQuote product linked — link it in Library › WeQuote' });
+  }
+  function wqQuoteUrl(q) { var W = global.SonorWQClient; return (q && q.id && W && W.webUrl) ? W.webUrl('quote', q.id) : null; }
   function num(v, d) { if (v === null || v === undefined || v === '') return d; var n = Number(v); return isFinite(n) ? n : d; }
   function fmt(v, dp) { return Number(v || 0).toLocaleString('en-GB', { maximumFractionDigits: dp == null ? 2 : dp, minimumFractionDigits: dp == null ? 0 : dp }); }
   function toast(m) { try { if (global.SonorShell && global.SonorShell.toast) return global.SonorShell.toast(m); } catch (e) {} console.log('[fabric]', m); }
@@ -193,14 +210,14 @@
     h += '<div class="panel"><div class="ptt">Track <span class="opt-tag">· the perimeter profile the fabric is tensioned into</span></div><div class="mat-grid">';
     E.tracks().filter(function (t) { return t.role !== 'split'; }).forEach(function (t) {
       var on = d.trackId === t.id;
-      h += '<button class="mcard' + (on ? ' on' : '') + '" onclick="FabricApp.setDefault(\'trackId\',\'' + t.id + '\')"><div class="mc-name">' + esc(t.name) + '</div><div class="mc-meta">' + (t.depth_mm ? t.depth_mm + ' mm' : '') + (t.acoustic ? ' · acoustic' : ' · fabric only') + (t.wq ? '' : ' · <span class="warn">no WeQuote product</span>') + '</div><div class="mc-price" style="font-size:10.5px;line-height:1.45">' + esc(t.note || '') + '</div></button>';
+      h += '<button class="mcard' + (on ? ' on' : '') + '" onclick="FabricApp.setDefault(\'trackId\',\'' + t.id + '\')"><div class="mc-name">' + esc(t.name) + '</div><div class="mc-meta">' + (t.depth_mm ? t.depth_mm + ' mm' : '') + (t.acoustic ? ' · acoustic' : ' · fabric only') + itemWqMark(t) + '</div><div class="mc-price" style="font-size:10.5px;line-height:1.45">' + esc(t.note || '') + '</div></button>';
     });
     h += '</div>' + (E.tracks().some(function (t) { return t.role === 'split'; }) ? '<div class="hint">Seams between panels take a split track (double-sided) — counted automatically from the panel layout.</div>' : '') + '</div>';
     if (tr && tr.acoustic) {
       h += '<div class="panel"><div class="ptt">Acoustic infill <span class="opt-tag">· behind the fabric · ' + (tr.infill_mm || '') + ' mm track</span></div><div class="mat-grid">';
       E.infills().forEach(function (it) {
         var on = (d.infillId || (infillFor(tr) || {}).id) === it.id;
-        h += '<button class="mcard' + (on ? ' on' : '') + '" onclick="FabricApp.setDefault(\'infillId\',\'' + it.id + '\')"><div class="mc-name">' + esc(it.name) + '</div><div class="mc-meta">' + (it.thickness_mm || '') + ' mm · ' + (it.board_mm ? it.board_mm.join(' × ') + ' boards' : '') + (it.thickness_mm !== tr.infill_mm ? ' · <span class="warn">does not match the track depth</span>' : '') + (it.wq ? '' : ' · <span class="warn">no WeQuote product</span>') + '</div><div class="mc-price" style="font-size:10.5px;line-height:1.45">' + esc(it.note || '') + '</div></button>';
+        h += '<button class="mcard' + (on ? ' on' : '') + '" onclick="FabricApp.setDefault(\'infillId\',\'' + it.id + '\')"><div class="mc-name">' + esc(it.name) + '</div><div class="mc-meta">' + (it.thickness_mm || '') + ' mm · ' + (it.board_mm ? it.board_mm.join(' × ') + ' boards' : '') + (it.thickness_mm !== tr.infill_mm ? ' · <span class="warn">does not match the track depth</span>' : '') + itemWqMark(it) + '</div><div class="mc-price" style="font-size:10.5px;line-height:1.45">' + esc(it.note || '') + '</div></button>';
       });
       h += '</div></div>';
     }
@@ -251,7 +268,7 @@
       '<div class="mc-top"><span class="mc-sw" style="--c:' + esc(f.hex || (cw[0] && (cw[0].hex || guessHex(cw[0].name))) || '#3a3835') + (f.swatch_img ? ';background-image:url(\'' + esc(f.swatch_img) + '\');background-size:cover' : '') + '"></span><div class="mc-name">' + esc(f.name) + '</div>' + (f.at ? '<span class="at-badge">AT</span>' : '') + '</div>' +
       '<div class="mc-meta">' + esc(f.manufacturer || '') + (f.tier ? ' · tier ' + f.tier : '') + (f.width_m ? ' · ' + f.width_m + ' m roll' : '') + '</div>' +
       '<div class="mc-price" style="font-size:10.5px;line-height:1.45">' + esc((f.note || '').replace(/\s·\s\d+\s*colourways.*$/, '')) + '</div>' +
-      '<div class="mc-col">' + (cw.length ? cw.length + ' colour cards' : (f.colours_available ? f.colours_available + ' colourways in the range' : 'colourways on request')) + (f.wq ? '' : ' · <span class="warn">no WeQuote product</span>') + '</div></button>';
+      '<div class="mc-col">' + (cw.length ? cw.length + ' colour cards' : (f.colours_available ? f.colours_available + ' colourways in the range' : 'colourways on request')) + itemWqMark(f) + '</div></button>';
   }
   function colourPickerHtml(f, current, setter) {
     if (!f) return '';
@@ -380,12 +397,12 @@
     var W = global.SonorFabricWq; if (!W) return '<div class="ptt">WeQuote</div><div class="hint" style="margin:0">WeQuote module not loaded.</div>';
     var plan = W.buildPlan(wqModel(), ctx.wqQuote || null), t = plan.totals;
     var h = '<div class="ptt">WeQuote <span class="opt-tag">· one area per room · Stretched Fabric Walls lines</span></div>';
-    h += '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><span class="hint" style="margin:0">Paired quote:</span>' + (ctx.wqQuote ? '<span class="spec-chip">#' + esc(ctx.wqQuote.no || ctx.wqQuote.id) + (ctx.wqQuote.description ? ' — ' + esc(ctx.wqQuote.description) : '') + (ctx.wqQuote.stage ? ' · ' + esc(ctx.wqQuote.stage) : '') + '</span>' : '<span class="hint warn" style="margin:0">none</span>') +
+    h += '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><span class="hint" style="margin:0">Paired quote:</span>' + (ctx.wqQuote ? wqPill({ href: wqQuoteUrl(ctx.wqQuote), title: 'Open WeQuote quote #' + (ctx.wqQuote.no || ctx.wqQuote.id) }) + ' <span class="spec-chip">#' + esc(ctx.wqQuote.no || ctx.wqQuote.id) + (ctx.wqQuote.description ? ' — ' + esc(ctx.wqQuote.description) : '') + (ctx.wqQuote.stage ? ' · ' + esc(ctx.wqQuote.stage) : '') + '</span>' : '<span class="hint warn" style="margin:0">none</span>') +
       '<select id="wqPick" style="min-width:220px"><option value="">— pick a quote on this project —</option>' + (ctx.wqLinks || []).map(function (l) { return '<option value="' + esc(l.quote_id) + '">#' + esc(l.quote_no || l.quote_id) + (l.wq_description ? ' — ' + esc(l.wq_description) : '') + ' · ' + esc(l.slot) + (l.wq_stage ? ' · ' + esc(l.wq_stage) : '') + '</option>'; }).join('') + '</select>' +
       '<input id="wqId" placeholder="or WeQuote quote id" style="width:150px"><button class="ghost sm" onclick="FabricApp.wqPair()">Pair</button><button class="ghost sm" onclick="FabricApp.wqRefresh()">↻</button></div>';
     h += '<div style="overflow-x:auto"><table class="pln"><thead><tr><th style="text-align:left">Area</th><th style="text-align:left">Line</th><th>Qty</th><th style="text-align:left">WeQuote product</th></tr></thead><tbody>';
-    plan.floors.forEach(function (fl) { fl.rooms.forEach(function (r) { r.lines.forEach(function (ln, i) { h += '<tr><td style="text-align:left">' + (i ? '' : '<b>' + esc(fl.code + ' · ' + r.name) + '</b>') + '</td><td style="text-align:left">' + esc(ln.basis || ln.name) + '</td><td>' + ln.qty + ' ' + (ln.unit === 'm2' ? 'm²' : ln.unit) + '</td><td style="text-align:left;color:var(--muted)">' + (ln.kind === 'estimate' ? '≈ ' : '') + esc(ln.name) + ' <span style="font-size:9px">#' + ln.product_id + '</span></td></tr>'; }); }); });
-    (plan.unmapped || []).forEach(function (u) { h += '<tr><td></td><td style="text-align:left" class="warn">' + esc(u.label) + '</td><td class="warn">' + u.qty + '</td><td style="text-align:left" class="warn">no WeQuote product — link it in Library › WeQuote (or add a WQ-PRODUCTS-NEEDED row)</td></tr>'; });
+    plan.floors.forEach(function (fl) { fl.rooms.forEach(function (r) { r.lines.forEach(function (ln, i) { h += '<tr><td style="text-align:left">' + (i ? '' : '<b>' + esc(fl.code + ' · ' + r.name) + '</b>') + '</td><td style="text-align:left">' + esc(ln.basis || ln.name) + '</td><td>' + ln.qty + ' ' + (ln.unit === 'm2' ? 'm²' : ln.unit) + '</td><td style="text-align:left;color:var(--muted)">' + wqPill({ title: 'WeQuote product #' + ln.product_id }) + ' ' + (ln.kind === 'estimate' ? '≈ ' : '') + esc(ln.name) + ' <span style="font-size:9px">#' + ln.product_id + '</span></td></tr>'; }); }); });
+    (plan.unmapped || []).forEach(function (u) { h += '<tr><td></td><td style="text-align:left" class="warn">' + esc(u.label) + '</td><td class="warn">' + u.qty + '</td><td style="text-align:left" class="warn">' + wqPill({ off: true, title: 'Not linked to a WeQuote product' }) + ' no WeQuote product — link it in Library › WeQuote (or add a WQ-PRODUCTS-NEEDED row)</td></tr>'; });
     h += '</tbody></table></div><div class="hint" style="margin-top:8px">' + t.wqLines + ' lines · ' + t.mapped + ' mapped · ' + t.fallback + ' on the generic fabric line · ' + t.unmapped + ' unmapped. Delta push — re-pushing never duplicates; the API cannot delete, so corrections happen in WeQuote. Prices resolve in WeQuote.</div>';
     h += '<div class="actions" style="margin-top:12px"><button class="btn ghost" style="padding:10px 18px" onclick="FabricApp.wqPush(true)"' + (ctx.wqQuote ? '' : ' disabled') + '>Dry run</button><button class="btn primary" style="padding:10px 18px" onclick="FabricApp.wqPush(false)"' + (ctx.wqQuote ? '' : ' disabled') + '>🧾 Push to WeQuote</button><span class="hint" id="wqStatus" style="margin:0;align-self:center">' + esc(ctx.wqStatus || '') + '</span></div>';
     h += '<div class="wq-bar"><i id="wqBar"></i></div><pre id="wqLog" class="wq-log"></pre>';
