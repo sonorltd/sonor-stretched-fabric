@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   window.__FABRIC_CONFIG__ = {
-    version: '0.1.1',
+    version: '0.2.1',
     buildDate: '2026-10-16',
     cacheKey: 'sonor_fabric_ssot_v1',
     steps: ['Rooms', 'System', 'Fabric', 'Layout', 'Summary'],

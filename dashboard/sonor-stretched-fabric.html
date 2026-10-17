@@ -131,6 +131,8 @@
     .sm-mfr { font-size:10px; letter-spacing:.11em; text-transform:uppercase; color:var(--muted); } .sm-head h2 { font-family:'Gilroy','DM Sans',sans-serif; font-weight:800; letter-spacing:-.02em; font-size:30px; margin:4px 0 0; background:linear-gradient(90deg,var(--gold2),var(--gold)); -webkit-background-clip:text; background-clip:text; color:transparent; } .sm-date { font-size:12px; color:var(--muted); }
     .strip { display:flex; flex-wrap:wrap; background:var(--bg2); border:1px solid var(--brd); border-radius:14px; overflow:hidden; margin-bottom:22px; } .cellx { flex:1; min-width:150px; padding:15px 19px; border-right:1px solid var(--brd); } .cellx:last-child{ border:none; } .cl { font-size:9px; letter-spacing:.11em; text-transform:uppercase; color:var(--muted); } .cv { font-family:'Gilroy','DM Sans',sans-serif; font-weight:800; font-size:16px; color:var(--cream); margin-top:4px; } .cn { font-size:10px; color:var(--muted); margin-top:2px; }
     table.pln { width:100%; border-collapse:collapse; font-size:12px; } .pln th { font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:600; padding:6px 8px; border-bottom:1px solid var(--brd); text-align:right; } .pln td { padding:8px; border-bottom:1px solid var(--brd2); text-align:right; vertical-align:top; } .pln td b { color:var(--cream); }
+    /* v0.2.0 — the shared WeQuote-linked mark (.wq-pill, sonor-components.css) keeps its own ink inside the gold-link canvas */
+    .sc .wq-pill, .sc a.wq-pill { color:#fff; } .sc .wq-pill.wq-off, .sc a.wq-pill.wq-off { color:var(--wq); } .mc-meta .wq-pill, .mc-col .wq-pill { margin-left:4px; letter-spacing:.06em; }
     .spec-chip { font-size:11px; color:var(--cream); border:1px solid var(--brd); border-radius:999px; padding:4px 10px; }
     .wq-bar { height:3px; background:var(--brd2); border-radius:2px; margin-top:10px; overflow:hidden; } .wq-bar i { display:block; height:100%; width:0; background:var(--gold); transition:width .3s; }
     .wq-log { display:none; max-height:160px; overflow:auto; font-size:10.5px; color:var(--muted); background:#0b0a0c; border:1px solid var(--brd2); border-radius:8px; padding:8px 10px; margin-top:8px; white-space:pre-wrap; } .wq-log.on { display:block; }
@@ -260,11 +262,12 @@
   </div>
 
   <script>
-    const APP_VERSION = '0.1.1';
+    const APP_VERSION = '0.2.1';
     document.addEventListener('DOMContentLoaded', function(){ var v = document.getElementById('hdrVer'); if (v) v.textContent = 'v' + APP_VERSION; });
     (function(){ var cfg = window.__FABRIC_CONFIG__ || {}; var el = document.getElementById('heroBg'); if (el && cfg.heroImage) { el.classList.remove('grad'); el.style.backgroundImage = "url('" + cfg.heroImage + "')"; } })();
     SonorShell.mount({ appKey:'stretched-fabric', appName:'Stretched Fabric', repo:'sonor-stretched-fabric', version:APP_VERSION, faviconHref:'../data/favicon.svg', assetBase:'../data/', supabase:false, palette:{ self:'stretched-fabric' } });
-    FabricApp.boot();
+    // S-4.3 self-report: the shell runs supabase:false here, so the app reports its own version once the catalogue load has made the Supabase client
+    (function (rep) { Promise.resolve(FabricApp.boot()).then(rep, rep); })(function () { var d = window.__FABRIC_DB__; if (d && d.versions && d.versions.report) d.versions.report('stretched-fabric', APP_VERSION, 'Stretched Fabric', 'sonor-stretched-fabric').catch(function (e) { console.warn('[stretched-fabric] version report', e && e.message); }); });
   </script>
 </body>
 </html>

@@ -1,6 +1,12 @@
-# Stretched Fabric — Claude Code Context (v0.1.1)
+# Stretched Fabric — Claude Code Context (v0.2.1)
 
 > **Active theme: locked custom / slate canvas** — client-facing surface, `data-theme-lock` (sonor-platform §2 exemption); the cross-app ◐ cookie never flips it.
+
+> **v0.2.1 (2026-10-17) — consistency batch.** Theme boot `data/sonor-theme.js` first in `<head>` (data-theme-lock kept), served kit with `data/kit` mirror fallback, supabase-js pinned to 2.45.4 + SRI, shared masters synced (project-bar 1.14.0, kit 0.7.4 mirror, wq-sync 1.7.3, takeoffs-supabase RPC-first, wq-push 1.1.0). No feature change.
+
+> **v0.2.0 (2026-10-17) — WeQuote-linked mark** (Bryn: "a small wq in their swatch of almost red icon which is a pill bubble against items that are wq linked"): the shared `.wq-pill` (small red WQ, `data/sonor-components.css`, `SonorWQClient.pill()` 1.3.1 — both synced from the root masters) on System track + infill cards and Fabric cards linked through `wq_product_skus` (title = WeQuote product #), the outline `.wq-off` on the ones with no WeQuote product (replaces the old "no WeQuote product" text), beside the paired quote in the Summary WeQuote panel (links to the quote in WeQuote) and on every mapped / unmapped push-plan line. Internal build only — the client build (`__FABRIC_CLIENT__`) shows no WeQuote marks; never on the PDFs.
+>
+> **v0.1.1 (2026-10-17) — version self-report.** The shell mounts with `supabase:false`, so nothing wrote `app_versions` on boot; the dashboard now calls `db.versions.report('stretched-fabric', APP_VERSION, …)` once after `boot()` (the catalogue load makes the SonorDB client). No feature change.
 
 > **Spine version: 1.3** (SONOR-APP-SPINE.md — SonorShell-mounted like Cinema Aesthetic / Seating / Lighting Design; declared at birth 2026-10-16)
 > Inherits: `../CLAUDE.md` (master brand rules + cross-project references)
@@ -105,6 +111,8 @@ calc result; nothing is dragged or stored as geometry beyond mm sizes.
 6. Calc changes: tests first (`node --test tests/`), then the app, then re-eyeball a proposal PDF.
 
 ## Feature timeline
+- v0.2.1 (2026-10-17) — consistency batch: theme boot first (lock kept), served kit + mirror fallback, pinned supabase-js, synced masters.
+- v0.2.0 (2026-10-17) — shared WeQuote-linked mark (`.wq-pill`) on WQ-linked track / infill / fabric cards (outline `.wq-off` when unlinked), the paired quote (links to WeQuote) and the push-plan lines; internal build only. sonor-components.css + sonor-wq-client.js 1.3.1 synced.
 - v0.1.0 (2026-10-16) — app birth (B-543). register-app 10 touchpoints; `fabric_configs` table;
   Library seed rows (4 track · 3 infill) + `kind` / `seating_material_id` stamped on the 14 Cineca wall
   fabrics; 19 `wq_product_skus` aesthetic links to the existing WeQuote stretched-fabric products;
