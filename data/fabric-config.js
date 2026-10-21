@@ -1,4 +1,4 @@
-/* Sonor Stretched Fabric — static config (v0.1.0)
+/* Sonor Stretched Fabric — static config (v0.3.0)
    window.__FABRIC_CONFIG__ — flow rules, surface defaults, calc constants, WeQuote shape, copy.
    Engineering refs only. Project data lives in Supabase (fabric_configs); the catalogue is the
    Library (aesthetic_items → v_aesthetic_catalogue: wall_fabric · stretch_track · stretch_infill).
@@ -6,10 +6,11 @@
 (function () {
   'use strict';
   window.__FABRIC_CONFIG__ = {
-    version: '0.2.1',
-    buildDate: '2026-10-16',
+    version: '0.3.0',
+    buildDate: '2026-10-21',
     cacheKey: 'sonor_fabric_ssot_v1',
-    steps: ['Rooms', 'System', 'Fabric', 'Layout', 'Summary'],
+    steps: ['Rooms', 'System', 'Fabric', 'Layout', 'Photos', 'Summary'],
+    bucket: 'fabric-assets',             // v0.3.0 — room photos + simulations (public bucket, photos/<project>/… sims/<project>/…)
     heroImage: null,                      // null = branded gradient hero on the landing
 
     // Library categories this app reads (aesthetic_items via v_aesthetic_catalogue)
@@ -74,6 +75,8 @@
       system: 'The track depth sets what sits behind the fabric. A 12 mm track carries fabric alone; 25 mm and 50 mm acoustic tracks hold a mineral-wool infill that lets the surface absorb sound as well as look the part.',
       fabric: 'Fabrics are chosen from the Sonor library — luxury velvets and FR weaves for feature walls, acoustically transparent cloths where loudspeakers sit behind the finish. Physical samples are approved before any order is placed.',
       layout: 'Each surface is divided into panels at the fabric width, with split tracks at every seam. The elevations below show exactly where seams, openings and cut-outs fall.',
+      photos: 'Photographs of the room as it is today, with the chosen fabric and lighting laid over the walls — the panel seams fall exactly where the set-out puts them, and the room keeps its own light.',
+      renders: 'Visualisations of the finished room, produced from the photographs and the design — the fabric, the seams and the light as they will be.',
       schedule: 'Quantities carried on the quotation: fabric by the square metre per surface, track by the metre, infill by the square metre, and a cut-out for every device that passes through the finish.'
     },
     termsLines: [

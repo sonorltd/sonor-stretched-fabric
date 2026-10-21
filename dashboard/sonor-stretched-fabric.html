@@ -31,6 +31,8 @@
   <script src="../data/fabric-draw.js"></script>
   <script src="../data/fabric-pdf.js"></script>
   <script src="../data/fabric-wq.js"></script>
+  <script src="../data/fabric-sim.js"></script>          <!-- v0.3.0 — room photo simulator (Garden sim pattern) -->
+  <script src="../data/fabric-render-pack.js"></script>  <!-- v0.3.0 — lab render pack (CD render-handoff pattern) -->
   <script src="../data/fabric-app.js"></script>
   <script src="../data/backups/sonor-db-backup-latest.js"></script>
   <link rel="stylesheet" href="../data/brand.css">
@@ -123,6 +125,16 @@
     .chips { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 4px; }
     .chip { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--muted); background:var(--bg3); border:1px solid var(--brd2); border-radius:9px; padding:5px 7px; } .chip input { width:64px; padding:4px 6px; font-size:11px; } .chip input.q { width:44px; } .chip select { padding:4px 6px; font-size:11px; } .chip.co { border-color:rgba(173,153,120,.3); }
     .elev-wrap { margin-top:10px; max-width:680px; } .elev { display:block; max-height:300px; width:auto; max-width:100%; }
+    /* v0.3.0 — photos step: simulator (Garden sim chrome), lab pack, render gallery */
+    .sim-host { position:relative; border-radius:10px; overflow:hidden; background:#000; min-height:120px; } .fs-canvas { display:block; width:100%; height:auto; cursor:default; } .fs-err { padding:40px; color:var(--amber); text-align:center; }
+    .sim-tools { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:10px; } .sim-tools .sep { width:1px; height:18px; background:var(--brd); margin:0 4px; }
+    .tool-k.on { background:rgba(173,153,120,.18); border-color:var(--gold); color:var(--cream); }
+    .sim-sl { display:flex; align-items:center; gap:6px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); } .sim-sl input[type=range] { width:90px; accent-color:var(--gold); padding:0; }
+    .sim-sel { margin-top:8px; } .sim-row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; font-size:11px; color:var(--muted); background:var(--bg3); border:1px solid var(--brd2); border-radius:9px; padding:8px 10px; } .sim-row b { color:var(--gold); font-size:10px; letter-spacing:.12em; text-transform:uppercase; } .sim-row label { display:flex; align-items:center; gap:5px; } .sim-row input[type=range] { width:80px; accent-color:var(--gold); padding:0; } .sim-row select, .sim-row input[type=text], .sim-row input:not([type]) { padding:4px 7px; font-size:11px; }
+    .sim-card { border:1px solid var(--brd2); border-radius:10px; overflow:hidden; margin-bottom:9px; cursor:pointer; background:var(--bg3); } .sim-card.cur { border-color:var(--gold); } .sim-card img { display:block; width:100%; height:auto; } .sim-card-b { font-size:10.5px; color:var(--muted); padding:6px 9px; }
+    .rend-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; margin-top:12px; } .rend { border:1px solid var(--brd2); border-radius:10px; overflow:hidden; background:var(--bg3); } .rend.hero { border-color:var(--gold); } .rend img { display:block; width:100%; height:130px; object-fit:cover; } .rend-b { padding:7px 8px; display:flex; flex-direction:column; gap:6px; } .rend-b input { width:100%; padding:5px 7px; font-size:11px; } .rend-a { display:flex; gap:5px; align-items:center; } .rend-a .x { margin-left:auto; }
+    .dz-hint { display:none; position:absolute; inset:0; align-items:center; justify-content:center; background:rgba(9,8,7,.78); color:var(--gold); font-size:13px; letter-spacing:.1em; text-transform:uppercase; border:2px dashed var(--gold); border-radius:12px; z-index:5; pointer-events:none; } .dz-on { position:relative; } .dz-on .dz-hint { display:flex; }
+    .sf em { font-style:normal; color:var(--muted); font-size:10.5px; }
     /* summary */
     .summary { max-width:980px; margin:0 auto; }
     .client-row { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; margin-bottom:18px; } .client-row .cfld input { width:100%; }
@@ -178,7 +190,7 @@
     .strip2 { background:var(--w-bg1); } .wrap { max-width:1180px; margin:0 auto; padding:clamp(3.5rem,8vw,5.5rem) clamp(20px,5vw,48px); }
     .sl { display:flex; align-items:center; gap:.7rem; font-size:.62rem; letter-spacing:.28em; text-transform:uppercase; color:var(--w-gold-l); margin-bottom:.9rem; font-weight:600; } .sl span { width:20px; height:1px; background:var(--w-gold-l); }
     .sec-h { font-weight:800; font-size:clamp(1.9rem,4vw,3rem); line-height:1.02; letter-spacing:-.02em; margin:0 0 1rem; color:var(--w-txt); } .sec-p { font-size:.92rem; line-height:1.8; color:var(--w-muted); max-width:620px; margin:0; }
-    .steps3 { display:grid; grid-template-columns:repeat(5,1fr); gap:1px; margin-top:2.8rem; counter-reset:st; background:var(--w-brd); border:1px solid var(--w-brd); } @media(max-width:860px){ .steps3{ grid-template-columns:1fr 1fr; } } @media(max-width:520px){ .steps3{ grid-template-columns:1fr; } }
+    .steps3 { display:grid; grid-template-columns:repeat(6,1fr); gap:1px; margin-top:2.8rem; counter-reset:st; background:var(--w-brd); border:1px solid var(--w-brd); } @media(max-width:860px){ .steps3{ grid-template-columns:1fr 1fr; } } @media(max-width:520px){ .steps3{ grid-template-columns:1fr; } }
     .st { position:relative; padding:1.9rem 1.4rem; background:var(--w-bg1); } .st::before { counter-increment:st; content:counter(st,decimal-leading-zero); font-weight:800; font-size:.7rem; color:var(--w-gold); letter-spacing:.1em; }
     .st h4 { font-weight:800; font-size:.86rem; color:var(--w-txt); margin:.8rem 0 .5rem; } .st p { font-size:.74rem; line-height:1.7; color:var(--w-muted); margin:0; }
     .ovw-grid { display:grid; grid-template-columns:1fr; gap:22px; margin-top:1.6rem; } .ovw-col { background:var(--w-bg1); border:1px solid rgba(173,153,120,.14); border-radius:14px; padding:18px 20px; }
@@ -223,7 +235,7 @@
         <h1>Walls and ceilings, <span class="lt">finished in fabric</span>.</h1>
         <p class="hero-sub">Seamless tensioned fabric over concealed track — set out from your rooms, with the right fabric, the right acoustic build-up and every quantity worked out.</p>
         <div class="hero-ctas"><button class="cta-lg solid" onclick="FabricApp.enter()">Start — set out the rooms →</button><a class="cta-lg ghost" href="#how">See how it works</a></div>
-        <div class="hero-tags"><span>Cineca fabric library</span><span>Acoustic track &amp; infill</span><span>Panel set-out drawings</span><span>Proposal PDF</span></div>
+        <div class="hero-tags"><span>Cineca fabric library</span><span>Acoustic track &amp; infill</span><span>Panel set-out drawings</span><span>Seen in your room</span><span>Proposal PDF</span></div>
       </div></div>
     </section>
     <section class="strip2" id="ovw" style="display:none"><div class="wrap">
@@ -234,13 +246,14 @@
     </div></section>
     <section class="strip2" id="how"><div class="wrap">
       <div class="sl"><span></span>How it works</div>
-      <h2 class="sec-h">Five steps to <span class="lt">your proposal</span>.</h2>
+      <h2 class="sec-h">Six steps to <span class="lt">your proposal</span>.</h2>
       <p class="sec-p">Rooms and wall lengths flow in from the take-off plan and the cinema design — you choose the system and the fabric.</p>
       <div class="steps3">
         <div class="st"><h4>Rooms</h4><p>Pick rooms from the plan, the cinema design, or by size. Switch each wall and ceiling on or off.</p></div>
         <div class="st"><h4>System</h4><p>12 mm fabric-only track or 25 / 50 mm acoustic track with mineral-wool infill.</p></div>
         <div class="st"><h4>Fabric</h4><p>Velvets, suedes and acoustically transparent weaves from the Cineca range, with colour cards.</p></div>
         <div class="st"><h4>Layout</h4><p>Openings and device cut-outs on every surface, with the panel set-out drawn for each wall.</p></div>
+        <div class="st"><h4>Photos</h4><p>Photographs of the room as it is, with the fabric and LED lighting laid over the walls — and photoreal renders on request.</p></div>
         <div class="st"><h4>Proposal</h4><p>A branded proposal PDF, the internal cut list, and the quantities pushed straight to WeQuote.</p></div>
       </div>
       <div class="start-row"><button class="cta-lg solid" onclick="FabricApp.enter()">Start now →</button></div>
@@ -262,7 +275,7 @@
   </div>
 
   <script>
-    const APP_VERSION = '0.2.1';
+    const APP_VERSION = '0.3.0';
     document.addEventListener('DOMContentLoaded', function(){ var v = document.getElementById('hdrVer'); if (v) v.textContent = 'v' + APP_VERSION; });
     (function(){ var cfg = window.__FABRIC_CONFIG__ || {}; var el = document.getElementById('heroBg'); if (el && cfg.heroImage) { el.classList.remove('grad'); el.style.backgroundImage = "url('" + cfg.heroImage + "')"; } })();
     SonorShell.mount({ appKey:'stretched-fabric', appName:'Stretched Fabric', repo:'sonor-stretched-fabric', version:APP_VERSION, faviconHref:'../data/favicon.svg', assetBase:'../data/', supabase:false, palette:{ self:'stretched-fabric' } });

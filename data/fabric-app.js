@@ -1,6 +1,13 @@
-/* Sonor Stretched Fabric — wizard UI (v0.2.0)
+/* Sonor Stretched Fabric — wizard UI (v0.3.0)
    FabricApp — clones the Cinema Aesthetic / Seating app pattern:
-   Intro → Rooms → System → Fabric → Layout → Summary. Writes ONLY fabric_configs; publishes
+   Intro → Rooms → System → Fabric → Layout → Photos → Summary. Writes ONLY fabric_configs (+ the
+   fabric-assets storage bucket for room photos / simulations) and, for returned lab renders, the ONE
+   project gallery projects.metadata.design_renders (merge RPC, whole-array replace after a fresh read).
+   v0.3.0 — PHOTOS step (Garden Lighting pattern): photos of the client's existing room per room →
+   the in-app simulator (SonorFabricSim) paints the chosen fabric on 4-corner-picked walls with the
+   calc's panel seams + LED lines along traced edges → saved sim on the proposal PDF; and the LAB RENDER
+   PACK (SonorFabricRenderPack, consent-gated, WQ number only) for GPT photoreal renders, which come back
+   through "Add returned renders" → design_renders → the proposal's Visualisations page. Publishes
    projects.metadata.stretched_fabric_spec through the merge RPC (this app = the only writer of
    that key). Reads project context live: takeoffs_floors (rooms + wall lengths from the polygon),
    cinema_designs (the cinema room dims), projects.metadata (height, brief, cinema_design_summary
@@ -10,18 +17,19 @@
   'use strict';
 
   var CFG = global.__FABRIC_CONFIG__ || {};
-  var STEPS = CFG.steps || ['Rooms', 'System', 'Fabric', 'Layout', 'Summary'];
+  var STEPS = CFG.steps || ['Rooms', 'System', 'Fabric', 'Layout', 'Photos', 'Summary'];
   var CLIENT = !!global.__FABRIC_CLIENT__;
   var E = null, C = null, D = null;   // SonorFabric · SonorFabricCalc · SonorFabricDraw
 
   var cfg = {
     step: 1,
-    rooms: [],
+    rooms: [],                        // v0.3.0: rooms[].photos = [{id,src,path,w,h,dim,walls[],leds[],simSrc,simPath,simAt}]
     defaults: { fabricId: null, colour: null, trackId: null, infillId: null, orientation: 'drop', wastePct: null, gripMm: null, panelMaxMm: null },
     client: { name: '', project: '' },
+    lab: { consent: false, consentAt: null },   // v0.3.0: per-project consent to send room photos to the render lab (§32)
     projectId: null, _savedId: null, _savedLabel: null, _lastRef: null
   };
-  var ctx = { rooms: null, cinema: null, cinemaMaterials: null, heightMm: null, brief: null, projectRef: null, spec: null, wqLinks: null, wqQuote: null, wqStatus: '' };
+  var ctx = { rooms: null, cinema: null, cinemaMaterials: null, heightMm: null, brief: null, projectRef: null, spec: null, wqLinks: null, wqQuote: null, wqStatus: '', renders: null, simCtl: null, simRoomId: null, simPhotoId: null };
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -117,7 +125,10 @@
       next.onclick = cfg.step === STEPS.length ? savePdf : goNext;
     }
     var body = $('stepBody'); if (!body) return;
-    body.innerHTML = [renderRooms, renderSystem, renderFabric, renderLayout, renderSummary][cfg.step - 1]();
+    if (ctx.simCtl) { try { ctx.simCtl.destroy(); } catch (e) {} ctx.simCtl = null; }
+    var R = { Rooms: renderRooms, System: renderSystem, Fabric: renderFabric, Layout: renderLayout, Photos: renderPhotos, Summary: renderSummary };
+    body.innerHTML = (R[STEPS[cfg.step - 1]] || renderSummary)();
+    if (STEPS[cfg.step - 1] === 'Photos') afterPhotos();
   }
 
   // ── step 1 · rooms ───────────────────────────────────────────────────────
@@ -353,7 +364,231 @@
   function setCutout(ri, si, ci, k, v) { var c = cfg.rooms[ri].surfaces[si].cutouts[ci]; if (!c) return; c[k] = k === 'qty' ? Math.max(0, Math.round(num(v, c.qty))) : v; renderStep(); }
   function removeCutout(ri, si, ci) { cfg.rooms[ri].surfaces[si].cutouts.splice(ci, 1); renderStep(); }
 
-  // ── step 5 · summary ─────────────────────────────────────────────────────
+  // ── step 5 · photos (v0.3.0 — room photos → fabric + LED simulation · lab render pack · returned renders) ──
+  var LED_PRESETS = [
+    { id: 'cove', label: 'Ceiling cove', side: 1, len: 0.26, note: 'light washing DOWN the fabric from a concealed cove' },
+    { id: 'skirting', label: 'Skirting / floor', side: -1, len: 0.18, note: 'light grazing UP the fabric from a floor-level reveal' },
+    { id: 'reveal', label: 'Vertical reveal', side: 1, len: 0.14, note: 'a lit vertical joint or niche edge' },
+    { id: 'shelf', label: 'Shelf / ledge', side: 1, len: 0.16, note: 'light falling from under a shelf or screen' }
+  ];
+  function simRoom() { return cfg.rooms.find(function (r) { return r.id === ctx.simRoomId; }) || cfg.rooms[0] || null; }
+  function simPhoto() { var rm = simRoom(); if (!rm) return null; return (rm.photos || []).find(function (p) { return p.id === ctx.simPhotoId; }) || (rm.photos || [])[0] || null; }
+  function projKey() { return cfg.projectId || 'nop'; }
+  function fabricHexFor(rm) { var f = roomFabric(rm), col = roomColour(rm), cw = f ? E.colourways(f) : [], cc = cw.find(function (c) { return c.name === col; }); return (cc && cc.hex) || (col ? guessHex(col) : null) || (f && f.hex) || (cw[0] && (cw[0].hex || guessHex(cw[0].name))) || '#4a4642'; }
+  function wallPreset(rm, surfaceId) {
+    var f = roomFabric(rm), rc = calcRoom(rm), s = rm.surfaces.find(function (x) { return x.id === surfaceId; }), sc = s ? rc.surfaces.find(function (x) { return x.id === s.id; }) : null;
+    var seams = sc && sc.panels && s ? sc.panels.slice(1).map(function (p) { return p.x_mm / s.len_mm; }) : [];
+    return { surfaceId: s ? s.id : null, label: s ? s.label : 'Wall', hex: fabricHexFor(rm), kind: f ? (f.kind || 'fabric') : 'velvet', fabricName: f ? f.name : null, colourName: roomColour(rm), at: !!(f && f.at), seams: seams, len_mm: s ? s.len_mm : 4000, h_mm: s ? s.h_mm : rm.h_mm, keepLight: 0.62 };
+  }
+  // keep every traced wall in step with the design (fabric / colour / panel set-out can change after tracing)
+  function refreshWallPresets(rm) {
+    (rm.photos || []).forEach(function (ph) { (ph.walls || []).forEach(function (w) { if (!w.surfaceId) { var p0 = wallPreset(rm, null); w.hex = p0.hex; w.kind = p0.kind; w.fabricName = p0.fabricName; w.colourName = p0.colourName; w.at = p0.at; return; } var p = wallPreset(rm, w.surfaceId); ['hex', 'kind', 'fabricName', 'colourName', 'at', 'seams', 'len_mm', 'h_mm', 'label'].forEach(function (k) { w[k] = p[k]; }); }); });
+  }
+  function renderPhotos() {
+    var h = '<div class="lead"><h2>See it in the room.</h2><p>' + esc((CFG.sectionBlurbs || {}).photos || '') + '</p></div>';
+    if (!cfg.rooms.length) return h + '<div class="empty">No rooms yet — go back to the Rooms step.</div>';
+    var rm = simRoom(); ctx.simRoomId = rm.id; refreshWallPresets(rm);
+    var photos = rm.photos || [], cur = simPhoto(); ctx.simPhotoId = cur ? cur.id : null;
+    h += '<div class="cfg-grid"><div class="cfg-left">';
+    // photo picker
+    h += '<div class="panel" id="photoPanel"><div class="ptt">Room photos <span class="opt-tag">· ' + esc(rm.name) + ' · ' + photos.length + ' photo' + (photos.length === 1 ? '' : 's') + (photos.filter(function (p) { return p.simSrc; }).length ? ' · ' + photos.filter(function (p) { return p.simSrc; }).length + ' simulated' : '') + '</span></div>' +
+      '<div class="row4" style="align-items:center">' +
+      (cfg.rooms.length > 1 ? '<label class="cfld" style="flex:0 0 200px"><span>Room</span><select onchange="FabricApp.photoRoomSel(this.value)">' + cfg.rooms.map(function (r) { return '<option value="' + r.id + '"' + (r.id === rm.id ? ' selected' : '') + '>' + esc(r.name) + ((r.photos || []).length ? ' · ' + r.photos.length : '') + '</option>'; }).join('') + '</select></label>' : '') +
+      '<label class="cfld" style="flex:0 0 auto"><span>Add photos</span><input type="file" accept="image/*" multiple onchange="FabricApp.photoFiles(\'' + rm.id + '\',this.files)" style="font-size:11px;max-width:240px"></label>' +
+      (photos.length > 1 ? '<label class="cfld" style="flex:0 0 160px"><span>Photo</span><select onchange="FabricApp.photoSel(this.value)">' + photos.map(function (p, i) { return '<option value="' + p.id + '"' + (cur && cur.id === p.id ? ' selected' : '') + '>Photo ' + (i + 1) + (p.simSrc ? ' ✓' : '') + '</option>'; }).join('') + '</select></label>' : '') +
+      (cur ? '<button class="ghost sm" style="align-self:flex-end" onclick="FabricApp.photoRemove(\'' + rm.id + '\',\'' + cur.id + '\')">Remove photo</button>' : '') +
+      '</div>' + (photos.length ? '' : '<div class="hint">Drop photos of the room here, or choose files. Straight-on shots of each wall work best; a corner shot shows two walls at once.</div>') + '</div>';
+    // simulator
+    h += '<div class="panel" id="simPanel"><div class="ptt">Simulation <span class="opt-tag">· click the four corners of a wall · trace an LED line along an edge</span></div>';
+    if (!cur) h += '<div class="hint" id="simHost" style="min-height:180px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--brd);border-radius:10px">Add a photo to start.</div>';
+    else {
+      var f = roomFabric(rm);
+      h += '<div class="sim-tools">' +
+        '<button class="ghost sm tool-k" data-k="wall" onclick="FabricApp.simMode(\'wall\')">+ Fabric wall</button>' +
+        '<select id="simSurf" title="Which surface this wall is" style="padding:5px 8px;font-size:11px"><option value="">— surface —</option>' + rm.surfaces.filter(function (s) { return s.on; }).map(function (s) { return '<option value="' + s.id + '">' + esc(s.label) + '</option>'; }).join('') + '</select>' +
+        '<span class="sep"></span>' +
+        LED_PRESETS.map(function (p) { return '<button class="ghost sm tool-k" data-k="led-' + p.id + '" title="' + esc(p.note) + '" onclick="FabricApp.simMode(\'led\',\'' + p.id + '\')">+ LED · ' + esc(p.label) + '</button>'; }).join('') +
+        '<span class="sep"></span>' +
+        '<label class="sim-sl"><span>Dim room</span><input type="range" min="0" max="1" step="0.05" value="' + (cur.dim || 0) + '" oninput="FabricApp.simDim(this.value)"></label>' +
+        '<label class="sim-sl"><span>LED</span><input type="range" min="0" max="1" step="0.05" value="1" oninput="FabricApp.simLedPct(this.value)"></label>' +
+        '</div>';
+      h += '<div id="simHost" class="sim-host"></div>';
+      h += '<div id="simSel" class="sim-sel"></div>';
+      h += '<div class="hint" style="margin-top:8px">' + (f ? esc(f.name) + (roomColour(rm) ? ' · ' + esc(roomColour(rm)) : '') + ' — ' : '') + 'the fabric keeps the photo\'s own light and shadow; seams fall where the panel set-out puts them. Pick the surface before placing a wall so its panel seams come through.</div>';
+      h += '<div class="actions" style="margin-top:10px"><button class="btn ghost" style="padding:10px 18px" onclick="FabricApp.simSave()">Save simulation</button><button class="btn ghost" style="padding:10px 18px" onclick="FabricApp.simMarkers()">Hide / show markers</button><span class="hint" style="margin:0;align-self:center">' + (cur.simAt ? 'Saved ' + fmtDate(cur.simAt) : 'Not saved yet — saved simulations go on the proposal') + '</span></div>';
+    }
+    h += '</div>';
+    // lab render pack
+    if (!CLIENT) {
+      var nPh = cfg.rooms.reduce(function (n, r) { return n + (r.photos || []).length; }, 0), pn = global.SonorFabricRenderPack ? global.SonorFabricRenderPack.projectNumber(ctx.projectRef) : null;
+      h += '<div class="panel"><div class="ptt">Photoreal renders <span class="opt-tag">· via the Sonor render lab</span></div>' +
+        '<div class="hint" style="margin:0 0 10px">The lab (GPT image tool) renders the client\'s own room with the fabric and LED design applied — photoreal, same camera, nothing else changed. The pack carries the photos, a geometry guide per photo, the simulations and a ready prompt. Only the WQ number identifies the project; photos are re-rasterised so no camera metadata travels.</div>' +
+        '<label class="sf" style="margin-bottom:10px"><input type="checkbox" ' + (cfg.lab.consent ? 'checked' : '') + ' onchange="FabricApp.labConsent(this.checked)"><span>The client has agreed that photographs of their home may be used to produce design visualisations' + (cfg.lab.consentAt ? ' <em style="margin-left:6px">' + fmtDate(cfg.lab.consentAt) + '</em>' : '') + '</span></label>' +
+        '<div class="actions"><button class="btn primary" style="padding:10px 18px" onclick="FabricApp.labExport()"' + (cfg.lab.consent && nPh && pn ? '' : ' disabled') + '>📦 Export render pack</button>' +
+        '<label class="btn ghost" style="padding:10px 18px;cursor:pointer">Add returned renders<input type="file" accept="image/*" multiple style="display:none" onchange="FabricApp.rendersAdd(this.files)"></label>' +
+        '<span class="hint" style="margin:0;align-self:center">' + (pn ? 'WQ ' + pn + ' · ' + nPh + ' photo' + (nPh === 1 ? '' : 's') : 'the project needs a WQ number in its ref') + '</span></div>';
+      var rends = (ctx.renders || []).filter(function (r) { return r.app === 'stretched-fabric'; });
+      if (rends.length) h += '<div class="rend-grid">' + rends.map(function (r, i) { return '<div class="rend' + (r.hero ? ' hero' : '') + '"><img src="' + esc(r.url) + '" alt=""><div class="rend-b"><input value="' + esc(r.caption || '') + '" placeholder="Caption" onchange="FabricApp.rendersCaption(' + i + ',this.value)"><div class="rend-a"><button class="ghost sm" onclick="FabricApp.rendersHero(' + i + ')">' + (r.hero ? '★ Cover' : 'Make cover') + '</button><button class="ghost sm" onclick="FabricApp.rendersPdf(' + i + ')">' + (r.pdf === false ? 'Off the PDF' : 'On the PDF') + '</button><button class="x" title="Remove from the gallery" onclick="FabricApp.rendersRemove(' + i + ')">×</button></div></div></div>'; }).join('') + '</div>';
+      h += '</div>';
+    }
+    h += '</div>';
+    // right: saved simulations across rooms
+    h += '<div class="panel sticky"><div class="ptt">Simulations</div>';
+    var any = false;
+    cfg.rooms.forEach(function (r) { (r.photos || []).forEach(function (p, i) { if (!p.simSrc) return; any = true; h += '<div class="sim-card' + (cur && cur.id === p.id ? ' cur' : '') + '" onclick="FabricApp.photoRoomSel(\'' + r.id + '\',\'' + p.id + '\')"><img src="' + esc(p.simSrc) + '" alt=""><div class="sim-card-b">' + esc(r.name) + ' · photo ' + (i + 1) + ' · ' + (p.walls || []).length + ' wall' + ((p.walls || []).length === 1 ? '' : 's') + ((p.leds || []).length ? ' · ' + p.leds.length + ' LED' : '') + '</div></div>'; }); });
+    if (!any) h += '<div class="hint">Saved simulations appear here and on the proposal PDF, one per photo.</div>';
+    h += '</div></div>';
+    return h;
+  }
+  function afterPhotos() {
+    var rm = simRoom(); if (!rm) return;
+    dropzone($('photoPanel'), function (files) { photoFiles(rm.id, files); }, 'Drop photos of ' + rm.name);
+    var cur = simPhoto(), host = $('simHost'); if (!cur || !host || !global.SonorFabricSim) return;
+    ctx.simCtl = global.SonorFabricSim.mount(host, cur, {
+      onChange: function () { cur.simDirty = true; refreshSimSel(); },
+      onSelect: function () { refreshSimSel(); },
+      onMode: function (m) { document.querySelectorAll('.tool-k').forEach(function (b) { b.classList.remove('on'); }); if (!m) toast('Done'); }
+    });
+    dropzone(host, function (files) { photoFiles(rm.id, files); }, 'Drop photos of ' + rm.name);
+    refreshSimSel();
+  }
+  function refreshSimSel() {
+    var el = $('simSel'), c = ctx.simCtl; if (!el || !c) return;
+    var s = c.selected(), k = c.selectedKind(), rm = simRoom();
+    if (!s) { el.innerHTML = '<div class="hint" style="margin:0">' + (c.count().walls ? 'Click a wall or an LED point to edit it · Delete removes it.' : 'Choose the surface, press + Fabric wall, then click its four corners in the photo.') + '</div>'; return; }
+    if (k === 'wall') {
+      el.innerHTML = '<div class="sim-row"><b>Wall</b>' +
+        '<label>Surface <select onchange="FabricApp.simWallSurface(this.value)"><option value="">—</option>' + rm.surfaces.filter(function (x) { return x.on; }).map(function (x) { return '<option value="' + x.id + '"' + (s.surfaceId === x.id ? ' selected' : '') + '>' + esc(x.label) + '</option>'; }).join('') + '</select></label>' +
+        '<label>Keep photo light <input type="range" min="0" max="1" step="0.05" value="' + (s.keepLight == null ? 0.62 : s.keepLight) + '" oninput="FabricApp.simSet(\'keepLight\',Number(this.value))"></label>' +
+        '<label>Sheen <input type="range" min="0" max="1" step="0.05" value="' + (s.sheen == null ? 0.5 : s.sheen) + '" oninput="FabricApp.simSet(\'sheen\',Number(this.value))"></label>' +
+        '<label><input type="checkbox" ' + (s.showSeams === false ? '' : 'checked') + ' onchange="FabricApp.simSet(\'showSeams\',this.checked)"> seams (' + ((s.seams || []).length + 1) + ' panels)</label>' +
+        '<span class="hint" style="margin:0">' + esc(s.fabricName || '') + (s.colourName ? ' · ' + esc(s.colourName) : '') + ' ' + esc(s.hex || '') + '</span>' +
+        '<button class="ghost sm" onclick="FabricApp.simRemove()">Remove</button></div>';
+    } else {
+      el.innerHTML = '<div class="sim-row"><b>LED</b>' +
+        '<label>Label <input value="' + esc(s.label || '') + '" style="width:120px" onchange="FabricApp.simSet(\'label\',this.value)"></label>' +
+        '<label>CCT <select onchange="FabricApp.simSet(\'cct\',Number(this.value))">' + [2200, 2400, 2700, 3000, 3500, 4000].map(function (k) { return '<option' + ((s.cct || 2700) === k ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select></label>' +
+        '<label>Brightness <input type="range" min="0.1" max="1.4" step="0.05" value="' + (s.intensity == null ? 0.8 : s.intensity) + '" oninput="FabricApp.simSet(\'intensity\',Number(this.value))"></label>' +
+        '<label>Spill <input type="range" min="0.05" max="0.6" step="0.01" value="' + (s.len || 0.22) + '" oninput="FabricApp.simSet(\'len\',Number(this.value))"></label>' +
+        '<button class="ghost sm" onclick="FabricApp.simSet(\'side\',' + ((s.side || 1) * -1) + ')">Flip side</button>' +
+        '<button class="ghost sm" onclick="FabricApp.simRemove()">Remove</button></div>';
+    }
+  }
+  function photoRoomSel(rid, pid) { ctx.simRoomId = rid; ctx.simPhotoId = pid || null; renderStep(); }
+  function photoSel(pid) { ctx.simPhotoId = pid; renderStep(); }
+  // drag-and-drop (Garden v0.2.0, verbatim)
+  function dropzone(el, onFiles, label) {
+    if (!el || el._dz) return; el._dz = true;
+    var hint = document.createElement('div'); hint.className = 'dz-hint'; hint.textContent = label || 'Drop files here'; el.appendChild(hint);
+    var depth = 0;
+    el.addEventListener('dragenter', function (ev) { ev.preventDefault(); ev.stopPropagation(); depth++; el.classList.add('dz-on'); });
+    el.addEventListener('dragover', function (ev) { ev.preventDefault(); ev.stopPropagation(); ev.dataTransfer.dropEffect = 'copy'; });
+    el.addEventListener('dragleave', function () { depth = Math.max(0, depth - 1); if (!depth) el.classList.remove('dz-on'); });
+    el.addEventListener('drop', function (ev) { ev.preventDefault(); ev.stopPropagation(); depth = 0; el.classList.remove('dz-on'); var files = Array.prototype.slice.call((ev.dataTransfer && ev.dataTransfer.files) || []).filter(function (f) { return /^image\//.test(f.type) || /\.(heic|heif)$/i.test(f.name); }); if (!files.length) { toast('Drop image files (JPG / PNG / HEIC)'); return; } onFiles(files); });
+  }
+  // storage (fabric-assets, public) — photos + sims; the client build never uploads
+  function dataUrlToBlob(du) { var p = du.split(','), bin = atob(p[1]), mime = /data:([^;]+)/.exec(p[0])[1], u8 = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Blob([u8], { type: mime }); }
+  async function uploadDataUrl(path, dataUrl) {
+    var db = dbc(); if (!db || CLIENT) return null;
+    try {
+      var blob = dataUrlToBlob(dataUrl), B = CFG.bucket || 'fabric-assets';
+      var r = await db.storage.from(B).upload(path, blob, { upsert: true, contentType: blob.type, cacheControl: '3600' });
+      if (r.error) { console.warn('[fabric] upload failed', r.error); return null; }
+      var pub = db.storage.from(B).getPublicUrl(path);
+      return (pub.data && pub.data.publicUrl) ? pub.data.publicUrl + '?v=' + Date.now().toString(36) : null;
+    } catch (e) { console.warn('[fabric] upload error', e); return null; }
+  }
+  function rasterise(img, maxPx, type, q) { var s = Math.min(1, maxPx / Math.max(img.naturalWidth, img.naturalHeight)); var c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); return { dataUrl: c.toDataURL(type || 'image/jpeg', q || 0.88), w: c.width, h: c.height }; }
+  async function photoFiles(rid, files) {
+    var rm = cfg.rooms.find(function (r) { return r.id === rid; }); if (!rm || !files || !files.length) return;
+    rm.photos = rm.photos || []; ctx.simRoomId = rm.id;
+    toast('Loading photo' + (files.length > 1 ? 's' : '') + '…');
+    for (var i = 0; i < files.length; i++) {
+      try {
+        var url = URL.createObjectURL(files[i]), img = await global.SonorFabricSim.loadImg(url), r = rasterise(img, 1600, 'image/jpeg', 0.88); URL.revokeObjectURL(url);   // re-rasterised → EXIF / GPS dropped (§32)
+        var ph = { id: 'ph' + Date.now().toString(36) + i, src: r.dataUrl, w: r.w, h: r.h, dim: 0, walls: [], leds: [] };
+        rm.photos.push(ph); ctx.simPhotoId = ph.id;
+        var stored = await uploadDataUrl('photos/' + projKey() + '/' + rm.id + '-' + ph.id + '.jpg', r.dataUrl);
+        if (stored) { ph.src = stored; ph.path = stored.split('?')[0]; }
+      } catch (e) { console.warn('[fabric] photo failed', e); }
+    }
+    toast('Photo added — choose the surface, then + Fabric wall and click its four corners');
+    renderStep();
+  }
+  function photoRemove(rid, pid) { var rm = cfg.rooms.find(function (r) { return r.id === rid; }); if (!rm || !confirm('Remove this photo and its simulation?')) return; rm.photos = (rm.photos || []).filter(function (p) { return p.id !== pid; }); ctx.simPhotoId = null; renderStep(); }
+  function simMode(kind, presetId) {
+    var c = ctx.simCtl; if (!c) return;
+    var rm = simRoom(), btnKey = kind === 'wall' ? 'wall' : 'led-' + presetId;
+    if (c.mode() && document.querySelector('.tool-k.on[data-k="' + btnKey + '"]')) { c.setMode(null); document.querySelectorAll('.tool-k').forEach(function (b) { b.classList.remove('on'); }); return; }
+    document.querySelectorAll('.tool-k').forEach(function (b) { b.classList.toggle('on', b.dataset.k === btnKey); });
+    if (kind === 'wall') { var sid = ($('simSurf') || {}).value || null; c.setMode('wall', wallPreset(rm, sid)); toast(sid ? 'Click the four corners of the ' + ((rm.surfaces.find(function (s) { return s.id === sid; }) || {}).label || 'wall').toLowerCase() : 'Click the four corners of the wall (pick a surface first for its panel seams)'); return; }
+    var p = LED_PRESETS.find(function (x) { return x.id === presetId; }) || LED_PRESETS[0];
+    c.setMode('led', { label: p.label, side: p.side, len: p.len, cct: 2700, intensity: 0.8 }); toast('Trace the LED line along the edge — click points, double-click or Enter to finish');
+  }
+  function simWallSurface(sid) { var c = ctx.simCtl, rm = simRoom(); if (!c || !rm) return; var p = wallPreset(rm, sid || null); c.update({ surfaceId: p.surfaceId, label: p.label, seams: p.seams, len_mm: p.len_mm, h_mm: p.h_mm, hex: p.hex, kind: p.kind, fabricName: p.fabricName, colourName: p.colourName, at: p.at }); refreshSimSel(); }
+  function simSet(k, v) { if (!ctx.simCtl) return; var o = {}; o[k] = v; ctx.simCtl.update(o); }
+  function simRemove() { if (ctx.simCtl) ctx.simCtl.remove(); }
+  function simDim(v) { if (ctx.simCtl) ctx.simCtl.setDim(Number(v)); }
+  function simLedPct(v) { if (ctx.simCtl) ctx.simCtl.setLedPct(Number(v)); }
+  var _mk = true; function simMarkers() { _mk = !_mk; if (ctx.simCtl) ctx.simCtl.setMarkers(_mk); }
+  async function simSave() {
+    var p = simPhoto(), rm = simRoom(); if (!p || !ctx.simCtl) return;
+    ctx.simCtl.setLedPct(1);
+    var du = ctx.simCtl.export(1600, 0.86); if (!du) return;
+    toast('Saving simulation…');
+    var url = await uploadDataUrl('sims/' + projKey() + '/' + rm.id + '-' + p.id + '.jpg', du);
+    p.simSrc = url || du; if (url) p.simPath = url.split('?')[0]; p.simDirty = false; p.simAt = new Date().toISOString();
+    toast(url ? 'Simulation saved' : 'Simulation kept locally (not uploaded)');
+    renderStep();
+  }
+  function labConsent(on) { cfg.lab.consent = !!on; cfg.lab.consentAt = on ? new Date().toISOString() : null; renderStep(); }
+  // the lab model — WQ number only (no client name / address / design label crosses the wall, §31/§32)
+  function labModel() {
+    var swatches = [];
+    var rooms = cfg.rooms.filter(function (r) { return (r.photos || []).length; }).map(function (rm) {
+      refreshWallPresets(rm);
+      var f = roomFabric(rm), rc = calcRoom(rm), tr = roomTrack(rm), hex = fabricHexFor(rm), col = roomColour(rm);
+      if (f && !swatches.some(function (s) { return s.hex === hex; })) swatches.push({ name: f.name + (col ? ' ' + col : ''), hex: hex });
+      return { name: rm.name, code: rm.code || null, floor_code: rm.floor_code || null, fabric: f ? f.name : null, fabricLine: f ? f.name + (col ? ' in ' + col : '') + ' (' + (f.manufacturer || 'Cineca') + (f.at ? ', acoustically transparent weave' : ', ' + (KIND_LABEL[f.kind] || 'fabric').toLowerCase()) + ') ' + hex : 'fabric to be selected', colour: col, hex: hex, at: !!(f && f.at), track: tr ? tr.name : null,
+        surfaces: rm.surfaces.filter(function (s) { return s.on; }).map(function (s) { var sc = rc.surfaces.find(function (x) { return x.id === s.id; }) || {}; return { id: s.id, label: s.label, kind: s.kind, len_mm: s.len_mm, h_mm: s.h_mm, panels: sc.n_panels || 0, panel_w_mm: sc.panel_w_mm || 0, openings: (s.openings || []).map(function (o) { return { label: o.label, w: o.w, h: o.h, qty: o.qty }; }), cutouts: (s.cutouts || []).map(function (c) { return { kind: c.kind, qty: c.qty }; }) }; }),
+        photos: (rm.photos || []).map(function (p) { return { id: p.id, daySrc: p.src, simSrc: p.simSrc || null, guideSrc: null, walls: p.walls || [], leds: p.leds || [], _p: p }; }) };
+    });
+    var model = { ref: ctx.projectRef || '', consent: !!cfg.lab.consent, rooms: rooms, swatches: swatches };
+    model.prepare = async function () {   // guides (+ a fresh sim where none was saved) rendered headless from the photo model
+      for (var i = 0; i < rooms.length; i++) for (var j = 0; j < rooms[i].photos.length; j++) { var ph = rooms[i].photos[j]; try { ph.guideSrc = await global.SonorFabricSim.guideToDataUrl(ph._p, 1600); if (!ph.simSrc && ((ph.walls.length) || ph.leds.length)) ph.simSrc = await global.SonorFabricSim.renderToDataUrl(ph._p, 1600); } catch (e) { console.warn('[fabric] guide', e); } delete ph._p; }
+      return model;
+    };
+    return model;
+  }
+  function labExport() { if (!global.SonorFabricRenderPack) { toast('Render pack module not loaded'); return; } global.SonorFabricRenderPack.export(labModel); }
+  // returned renders → projects.metadata.design_renders (the ONE gallery: read fresh → whole-array replace via the merge RPC, B-558)
+  async function rendersRead() { var db = dbc(); if (!db || !cfg.projectId) return []; try { var r = await db.from('projects').select('metadata').eq('id', cfg.projectId).maybeSingle(); var md = (r.data && r.data.metadata) || {}; return Array.isArray(md.design_renders) ? md.design_renders.filter(function (x) { return x && x.url; }) : []; } catch (e) { return []; } }
+  async function rendersWrite(list) { var db = dbc(); if (!db || !cfg.projectId) return false; var clean = list.map(function (r) { var o = {}; Object.keys(r).forEach(function (k) { if (r[k] != null) o[k] = r[k]; }); return o; }); var res = await db.rpc('sonor_merge_project_metadata', { p_project_id: cfg.projectId, p_patch: { design_renders: clean } }); if (res.error) { toast('Gallery write failed: ' + res.error.message); return false; } ctx.renders = clean; return true; }
+  async function rendersAdd(files) {
+    var db = dbc(); if (!db || CLIENT || !cfg.projectId || !files || !files.length) { toast('Select a project first'); return; }
+    var pn = global.SonorFabricRenderPack ? global.SonorFabricRenderPack.projectNumber(ctx.projectRef) : null, set = 'fabric-' + new Date().toISOString().slice(0, 10);
+    toast('Uploading ' + files.length + ' render' + (files.length === 1 ? '' : 's') + '…');
+    var list = await rendersRead(), added = 0;
+    for (var i = 0; i < files.length; i++) {
+      try {
+        var url = URL.createObjectURL(files[i]), img = await global.SonorFabricSim.loadImg(url), r = rasterise(img, 2000, 'image/jpeg', 0.88); URL.revokeObjectURL(url);
+        var path = 'aesthetic/renders/' + cfg.projectId + '/fabric-' + Date.now().toString(36) + i + '.jpg', blob = dataUrlToBlob(r.dataUrl);
+        var up = await db.storage.from('seating-assets').upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+        if (up.error) { console.warn('[fabric] render upload', up.error); continue; }
+        var pub = db.storage.from('seating-assets').getPublicUrl(path), u = pub.data && pub.data.publicUrl; if (!u) continue;
+        list.push({ url: u, caption: 'Stretched fabric — ' + (files[i].name || '').replace(/\.[a-z0-9]+$/i, '').replace(/^\d+-/, '').replace(/-/g, ' '), source: 'lab', set: set, at: new Date().toISOString(), pdf: true, app: 'stretched-fabric', project_no: pn || null }); added++;
+      } catch (e) { console.warn('[fabric] render failed', e); }
+    }
+    if (added && await rendersWrite(list)) toast(added + ' render' + (added === 1 ? '' : 's') + ' added to the project gallery');
+    renderStep();
+  }
+  function rendersMine() { return (ctx.renders || []).filter(function (r) { return r.app === 'stretched-fabric'; }); }
+  async function rendersCaption(i, v) { var list = await rendersRead(), mine = list.filter(function (r) { return r.app === 'stretched-fabric'; }); if (mine[i]) { mine[i].caption = v; await rendersWrite(list); } }
+  async function rendersHero(i) { var list = await rendersRead(), mine = list.filter(function (r) { return r.app === 'stretched-fabric'; }); if (!mine[i]) return; var on = !mine[i].hero; list.forEach(function (r) { delete r.hero; }); if (on) mine[i].hero = true; await rendersWrite(list); renderStep(); }
+  async function rendersPdf(i) { var list = await rendersRead(), mine = list.filter(function (r) { return r.app === 'stretched-fabric'; }); if (!mine[i]) return; mine[i].pdf = mine[i].pdf === false; await rendersWrite(list); renderStep(); }
+  async function rendersRemove(i) { var list = await rendersRead(), mine = list.filter(function (r) { return r.app === 'stretched-fabric'; }); if (!mine[i] || !confirm('Remove this render from the project gallery? (the file stays in storage)')) return; list = list.filter(function (r) { return r !== mine[i]; }); await rendersWrite(list); renderStep(); }
+
+  // ── step 6 · summary ─────────────────────────────────────────────────────
   function renderSummary() {
     var p = calcAll(), t = p.totals;
     var h = '<div class="summary">';
@@ -481,6 +716,7 @@
       var ch = md.ceiling_height_mm || (md.occupancy && md.occupancy.ceiling_height_mm) || (md.brief && md.brief.ceiling_height_mm) || null;
       if (ch) ctx.heightMm = Number(ch) || null;
       ctx.cinemaMaterials = (md.cinema_design_summary && md.cinema_design_summary.materials) || null;
+      ctx.renders = Array.isArray(md.design_renders) ? md.design_renders.filter(function (x) { return x && x.url; }) : null;   // v0.3.0 — the ONE project gallery
     } catch (e) {}
   }
 
@@ -553,7 +789,8 @@
       var res = await db.from('fabric_configs').select('id,label,config').eq('id', id).single();
       if (res.data && res.data.config) {
         var c = res.data.config;
-        ['rooms', 'defaults', 'client'].forEach(function (k) { if (c[k] != null) cfg[k] = c[k]; });
+        ['rooms', 'defaults', 'client', 'lab'].forEach(function (k) { if (c[k] != null) cfg[k] = c[k]; });
+        cfg.lab = cfg.lab || { consent: false, consentAt: null };
         cfg._savedId = res.data.id; cfg._savedLabel = res.data.label || null;
         seedDefaults();
         cfg.step = STEPS.length; renderStep();
@@ -572,7 +809,7 @@
     return 'SNR-SF-' + String(d.getFullYear()).slice(2) + p(d.getMonth() + 1) + p(d.getDate()) + '-' + r;
   }
   function pdfSafe(s) { var out = String(s); (CFG.pdfSafe || []).forEach(function (r) { out = out.replace(r[0], r[1]); }); return out.replace(/ff/g, 'f f').replace(/FF/g, 'F F').replace(/Ff/g, 'F f'); }
-  var SAFE_SKIP = /url|img|image|filename|hex|swatch|id$/i;
+  var SAFE_SKIP = /url|img|image|filename|hex|swatch|src|id$/i;   // v0.3.0: src (sim data URLs) never touched
   function deepSafe(o) { if (o == null) return o; if (typeof o === 'string') return pdfSafe(o); if (Array.isArray(o)) return o.map(deepSafe); if (typeof o === 'object') { Object.keys(o).forEach(function (k) { if (SAFE_SKIP.test(k)) return; o[k] = deepSafe(o[k]); }); } return o; }
   function pdfModel(internal) {
     var p = calcAll();
@@ -588,8 +825,12 @@
           track: tr ? { name: tr.name, depth_mm: tr.depth_mm, acoustic: !!tr.acoustic, note: tr.note } : null, infill: inf ? { name: inf.name, thickness_mm: inf.thickness_mm } : null,
           orientation: ((CFG.orientations || []).find(function (o) { return o.id === roomOpts(rm).orientation; }) || {}).label || '',
           surfaces: rm.surfaces.filter(function (s) { return s.on; }).map(function (s) { var sc = rc.surfaces.find(function (x) { return x.id === s.id; }); return { surface: s, calc: sc }; }),
+          // v0.3.0 — saved simulations (the client's room, fabric + LED applied) for the room page
+          sims: (rm.photos || []).filter(function (ph) { return ph.simSrc; }).map(function (ph) { return { src: ph.simSrc, walls: (ph.walls || []).map(function (w) { return w.label; }), leds: (ph.leds || []).map(function (l) { return l.label; }) }; }),
           totals: rc.totals };
       }),
+      // v0.3.0 — lab renders from the ONE project gallery (design_renders, this app's set, pdf !== false); hero first
+      renders: internal ? [] : rendersMine().filter(function (r) { return r.pdf !== false; }).sort(function (a, b) { return (b.hero ? 1 : 0) - (a.hero ? 1 : 0); }).map(function (r) { return { url: r.url, caption: r.caption || '', hero: !!r.hero }; }),
       totals: p.totals, flags: p.totals.flags,
       cinemaMaterials: ctx.cinemaMaterials || null,
       wq: internal ? (global.SonorFabricWq ? global.SonorFabricWq.buildPlan(wqModel(), ctx.wqQuote || null) : null) : null,
@@ -615,6 +856,11 @@
     addOpening: addOpening, setOpening: setOpening, removeOpening: removeOpening, addCutout: addCutout, setCutout: setCutout, removeCutout: removeCutout,
     setClient: setClient, saveConfig: saveConfig, openSaved: openSaved, openFromOverview: openFromOverview, savePdf: savePdf,
     wqRefresh: wqRefresh, wqPair: wqPair, wqPush: wqPush,
+    // v0.3.0 — photos · simulator · lab
+    photoRoomSel: photoRoomSel, photoSel: photoSel, photoFiles: photoFiles, photoRemove: photoRemove,
+    simMode: simMode, simWallSurface: simWallSurface, simSet: simSet, simRemove: simRemove, simDim: simDim, simLedPct: simLedPct, simMarkers: simMarkers, simSave: simSave,
+    labConsent: labConsent, labExport: labExport, labModel: labModel,
+    rendersAdd: rendersAdd, rendersCaption: rendersCaption, rendersHero: rendersHero, rendersPdf: rendersPdf, rendersRemove: rendersRemove,
     _debug: function () { return { cfg: cfg, ctx: ctx, calc: calcAll() }; }
   };
 })(window);

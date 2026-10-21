@@ -1,6 +1,8 @@
-# Stretched Fabric — Claude Code Context (v0.2.1)
+# Stretched Fabric — Claude Code Context (v0.3.0)
 
 > **Active theme: locked custom / slate canvas** — client-facing surface, `data-theme-lock` (sonor-platform §2 exemption); the cross-app ◐ cookie never flips it.
+
+> **v0.3.0 (2026-10-21) — PHOTOS step: see it in the room + lab renders (Bryn: "similar to the garden lighting app, can we upload photos of an existing room then possibly via the gpt link have it design and super impose a fabric wall and led design" → "do both").** (1) `data/fabric-sim.js` `SonorFabricSim` (Garden `garden-sim.js` pattern — mount / render / renderToDataUrl): photos per room (drop / choose, re-rasterised to ≤1600 px JPEG so EXIF/GPS never travel, uploaded to the new public bucket **`fabric-assets`** `photos/<project>/…`), click the four corners of a wall → the chosen fabric (colour card hex, velvet / suede / weave texture tile) is mapped through a homography with the photo's own luminosity kept underneath (`luminosity` composite) so shadows and light survive, the calc's panel seams drawn as split-track joints, LED cove / skirting / reveal / shelf lines traced along edges (one-sided blurred spill, CCT), room dim + LED sliders; **Save simulation** → `sims/<project>/…` → `rooms[].photos[].simSrc` → the proposal's new **IN THE ROOM** page per saved sim. (2) `data/fabric-render-pack.js` `SonorFabricRenderPack` (CD `28-render-handoff.js` pattern): **📦 Export render pack** → `renders/<WQ>/handoff/fN/` via the directory picker (ZIP fallback) with `brief.json`, the day photos, a geometry guide PNG per photo (wall quads · seams · LED paths), the sims, colour swatches, `prompts.md` (one GPT image-tool prompt per photo: same room, same camera, only the listed walls + LED change) and README; gated on the per-project **client-consent tick** (`cfg.lab.consent`, §32) and the WQ number (the only identifier that crosses the wall, §31). (3) **Add returned renders** → `seating-assets/aesthetic/renders/<project_id>/fabric-…` + `projects.metadata.design_renders` (the ONE gallery, read-fresh → whole-array replace via the merge RPC; entries tagged `app:'stretched-fabric'`, caption / hero / on-off-PDF controls) → the proposal's **VISUALISATIONS** pages after the Introduction, and `design_renders[].hero` becomes the cover photo (platform rule; `fabric-cover.jpg` / SC hero fallback). Steps are now Rooms → System → Fabric → Layout → **Photos** → Summary (`CFG.steps`); `fabric_configs.config` carries `rooms[].photos` + `lab`. B-567 cover change kept.
 
 > **v0.2.1 (2026-10-17) — consistency batch.** Theme boot `data/sonor-theme.js` first in `<head>` (data-theme-lock kept), served kit with `data/kit` mirror fallback, supabase-js pinned to 2.45.4 + SRI, shared masters synced (project-bar 1.14.0, kit 0.7.4 mirror, wq-sync 1.7.3, takeoffs-supabase RPC-first, wq-push 1.1.0). No feature change.
 
@@ -83,8 +85,10 @@ data/fabric-engine.js                   SonorFabric — SSOT load, colourways, W
 data/fabric-calc.js                     SonorFabricCalc — pure maths (node-testable)
 data/fabric-draw.js                     SonorFabricDraw — elevation painter: SVG (app) + pdf-lib (proposal)
 data/fabric-wq.js                       SonorFabricWq — plan builder + pairing + push
-data/fabric-pdf.js                      FabricPdf — proposal (luxury) + cut list & BOM (neutral)
-data/fabric-app.js                      FabricApp — wizard UI, saved designs, spec publish
+data/fabric-pdf.js                      FabricPdf — proposal (luxury: + visualisations + in-the-room pages) + cut list & BOM (neutral)
+data/fabric-sim.js                      SonorFabricSim — room-photo simulator (homography fabric map, seams, LED glow)   v0.3.0
+data/fabric-render-pack.js              SonorFabricRenderPack — lab handoff package (consent-gated, WQ number only)      v0.3.0
+data/fabric-app.js                      FabricApp — wizard UI, photos step, saved designs, spec publish, design_renders
 tests/fabric-calc.test.mjs              node --test
 ```
 
@@ -109,8 +113,10 @@ calc result; nothing is dragged or stored as geometry beyond mm sizes.
    project bar, saves and the WeQuote panel.
 5. Version bump = atomic (`/version-bump`); never hand-write `app_versions`.
 6. Calc changes: tests first (`node --test tests/`), then the app, then re-eyeball a proposal PDF.
+7. Client photos (v0.3.0): never leave Sonor without the consent tick; the render pack carries the WQ number only (§31/§32); renders live ONLY in `projects.metadata.design_renders` (never a second list in this app).
 
 ## Feature timeline
+- v0.3.0 (2026-10-21) — Photos step: room-photo simulator (fabric + seams + LED on the client's own photo, saved to `fabric-assets`, on the proposal), lab render pack export (consent + WQ-only), returned renders → `design_renders` → Visualisations pages + cover hero.
 - v0.2.1 (2026-10-17) — consistency batch: theme boot first (lock kept), served kit + mirror fallback, pinned supabase-js, synced masters.
 - v0.2.0 (2026-10-17) — shared WeQuote-linked mark (`.wq-pill`) on WQ-linked track / infill / fabric cards (outline `.wq-off` when unlinked), the paired quote (links to WeQuote) and the push-plan lines; internal build only. sonor-components.css + sonor-wq-client.js 1.3.1 synced.
 - v0.1.0 (2026-10-16) — app birth (B-543). register-app 10 touchpoints; `fabric_configs` table;

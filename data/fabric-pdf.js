@@ -1,4 +1,4 @@
-/* Sonor Stretched Fabric — STRETCHED FABRIC PROPOSAL + internal CUT LIST (v0.1.0)
+/* Sonor Stretched Fabric — STRETCHED FABRIC PROPOSAL + internal CUT LIST (v0.3.0)
    FabricPdf.generate(model) — built ENTIRELY on the shared SonorPdfLuxury chrome (data/sonor-pdf-luxury.js
    root master). Cover = the Service Contracts cover (sonor-platform §43: contract-hero.jpg, brandLarge, airy,
    CEDIA strip) — every client-facing Sonor document shares it. Client proposal = luxury (cream) theme — this is
@@ -6,8 +6,10 @@
    LIST & BOM on the neutral theme (white paper): per-panel cuts, track, infill boards, fixings, labour,
    WeQuote mapping. No prices on either — WeQuote carries commercials. No hosted links anywhere (§35).
    Sections (data-driven, empty sections dropped):
-   Cover · Introduction · Rooms & surfaces (one page per room: spec + elevations) · Fabric & colour ·
+   Cover · Introduction · Visualisations (lab renders from design_renders, v0.3.0) · Rooms & surfaces (one page
+   per room: spec + elevations, then IN THE ROOM — the saved photo simulations, v0.3.0) · Fabric & colour ·
    The system · Schedule · The detail  (+ internal: Cut list · BOM & WeQuote)
+   Cover photo = design_renders[].hero when this app's gallery has one (platform rule), else fabric-cover.jpg.
 */
 (function (global) {
   'use strict';
@@ -97,7 +99,50 @@
           lx.pageFoot(P, F);
         } });
       });
+      // v0.3.0 — IN THE ROOM: the saved simulations, one per page (full-width picture in the house frame)
+      (r.sims || []).forEach(function (sim, si) {
+        pages.push({ label: r.name, img: sim.src, draw: function (P, F, pageNo, TOTAL, imgs) {
+          var M = lx.M, A4 = lx.A4, COL = lx.COL, img = imgs && imgs[sim.src];
+          lx.pageHead(P, F, String(r.name).toUpperCase() + ' · IN THE ROOM', pageNo, TOTAL, DOC, { brand: 'large' });
+          var y = lx.sectionHead(P, F, 'SIMULATION', r.name, m.blurbs.photos);
+          y = Math.max(y, 170);
+          var W = A4.w - M * 2, maxH = A4.h - 150 - y;
+          if (img) { var dw = W, dh = img.height * (W / img.width); if (dh > maxH) { dh = maxH; dw = img.width * (maxH / img.height); } var ix = M + (W - dw) / 2; P.image(img, ix, y, dw, dh, 1); P.rectB(ix, y, dw, dh, COL.GOLD, 0.8); y += dh + 14; }
+          else { P.rect(M, y, W, 200, [234, 229, 219], 1); P.center('SIMULATION UNAVAILABLE', M + W / 2, y + 100, 7, F.b, COL.MUT, 2); y += 214; }
+          var cap = (sim.walls && sim.walls.length ? sim.walls.join(' · ') + (r.fabric ? ' in ' + r.fabric.name + (r.colour ? ' · ' + r.colour.name : '') : '') : '') + (sim.leds && sim.leds.length ? '  ·  LED: ' + sim.leds.join(', ') : '');
+          if (cap) P.text(fit(F.r, cap, 8.5, W), M, y, 8.5, F.r, COL.MUT);
+          P.text('A simulation on the client\'s own photograph — colour, seams and light are indicative; physical samples govern the finish.', M, y + 14, 7.5, F.r, COL.MUT);
+          lx.pageFoot(P, F);
+        } });
+      });
     });
+    return pages;
+  }
+
+  // ── VISUALISATIONS (v0.3.0) — lab renders from the ONE project gallery; hero first, two per page ──
+  function renderPages(m) {
+    var lx = L(), list = (m.renders || []).filter(function (r) { return r.url; }), pages = [];
+    if (!list.length) return pages;
+    var per = 2;
+    for (var i = 0; i < list.length; i += per) {
+      (function (chunk, idx, n) {
+        pages.push({ label: 'Visualisations', imgs: chunk.map(function (r) { return r.url; }), draw: function (P, F, pageNo, TOTAL, imgs) {
+          var M = lx.M, A4 = lx.A4, COL = lx.COL, W = A4.w - M * 2;
+          lx.pageHead(P, F, 'VISUALISATIONS' + (n > 1 ? ' · ' + (idx + 1) + '/' + n : ''), pageNo, TOTAL, DOC, { brand: 'large' });
+          var y = idx === 0 ? lx.sectionHead(P, F, 'THE FINISHED ROOM', 'Visualisations', m.blurbs.renders) : 96;
+          y = Math.max(y, idx === 0 ? 176 : 96);
+          var avail = A4.h - 80 - y, each = (avail - (chunk.length - 1) * 26) / chunk.length;
+          chunk.forEach(function (r) {
+            var img = imgs && imgs[r.url];
+            if (img) { var dw = W, dh = img.height * (W / img.width), maxH = each - 22; if (dh > maxH) { dh = maxH; dw = img.width * (maxH / img.height); } var ix = M + (W - dw) / 2; P.image(img, ix, y, dw, dh, 1); P.rectB(ix, y, dw, dh, COL.GOLD, 0.8); y += dh + 12; }
+            else { P.rect(M, y, W, each - 22, [234, 229, 219], 1); y += each - 10; }
+            if (r.caption) P.text(fit(F.r, r.caption, 8.5, W), M, y, 8.5, F.r, COL.MUT);
+            y += 14;
+          });
+          lx.pageFoot(P, F);
+        } });
+      })(list.slice(i, i + per), i / per, Math.ceil(list.length / per));
+    }
     return pages;
   }
 
@@ -236,20 +281,25 @@
     DOC = m.internal ? 'CUT LIST & BOM' : DOC_LABEL;   // PDF convention 2026-10-12: cream for the client proposal, neutral for working documents
     var F = await lx.makeFonts(doc, BASE);
     var hero = null, cedia = null, fadeImg = null;
-    try { hero = await lx.loadImage(doc, BASE + 'contract-hero.jpg'); } catch (e) {}
+    var heroR = (m.renders || []).find(function (r) { return r.hero && r.url; });   // v0.3.0: design_renders[].hero is the project cover (platform rule)
+    if (heroR) { try { hero = await lx.loadImage(doc, heroR.url); } catch (e) { hero = null; } }
+    if (!hero) { try { hero = await lx.loadImage(doc, BASE + 'fabric-cover.jpg'); } catch (e) { try { hero = await lx.loadImage(doc, BASE + 'contract-hero.jpg'); } catch (e2) {} } } // B-567: own cover (Branding - CORE/PDF-COVERS/fabric.jpg via sync-pdf-covers), SC hero as fallback
     try { cedia = await lx.loadImage(doc, BASE + 'cedia-member-stacked.png'); } catch (e) {}
     try { var fd = lx.fadePngDataUrl(); if (fd) fadeImg = await doc.embedPng(await lx.fetchBytes(fd)); } catch (e) {}
     // swatch images (colour card photos when the Library files them)
     var imgs = {};
     for (var i = 0; i < m.rooms.length; i++) { var r = m.rooms[i]; if (!r.fabric) continue; var k = r.fabric.name + '|' + (r.colour ? r.colour.name : ''); var u = (r.colour && r.colour.img) || r.fabric.swatchImg; if (u && !imgs[k]) { try { imgs[k] = await lx.loadImage(doc, u); } catch (e) {} } }
 
-    var sections = [{ label: 'Introduction', draw: secIntro(m) }].concat(roomPages(m)).concat([
+    // v0.3.0 — picture pages (simulations + lab renders) declare the images they need; loaded once here
+    var pics = {};
+    var sections = [{ label: 'Introduction', draw: secIntro(m) }].concat(renderPages(m)).concat(roomPages(m)).concat([
       { label: 'Fabric & colour', draw: secFabric(m, imgs) }, { label: 'The system', draw: secSystem(m) }, { label: 'Schedule', draw: secSchedule(m) }
     ]);
     if (m.internal) sections = sections.concat(cutPages(m)).concat([{ label: 'BOM & WeQuote', draw: secBom(m) }]);
     sections.push({ label: 'The detail', draw: secDetail(m) });
     sections = sections.filter(function (s) { return s.draw; });
     m.sectionList = sections.map(function (s) { return s.label; }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+    for (var si = 0; si < sections.length; si++) { var need = (sections[si].imgs || []).concat(sections[si].img ? [sections[si].img] : []); for (var ni = 0; ni < need.length; ni++) { if (!pics[need[ni]]) { try { pics[need[ni]] = await lx.loadImage(doc, need[ni]); } catch (e) { console.warn('[fabric-pdf] picture', e && e.message); } } } }
 
     var TOTAL = sections.length + 1;
     var p1 = doc.addPage([lx.A4.w, lx.A4.h]);
@@ -260,7 +310,7 @@
       title: m.title || 'Your home', subtitle: (m.internal ? 'Internal working document' : 'Stretched fabric walls & ceilings') + ' · ' + m.rooms.length + ' room' + (m.rooms.length === 1 ? '' : 's'),
       info: [['PREPARED FOR', fit(F.b, m.client || '—', 12.5, cw3)], ['PROJECT', fit(F.b, m.project || '—', 12.5, cw3)], ['REFERENCE', m.quoteRef || '—']]
     });
-    sections.forEach(function (s, idx) { var pg = doc.addPage([lx.A4.w, lx.A4.h]); var P = lx.mk(pg, doc); P.rect(0, 0, lx.A4.w, lx.A4.h, lx.COL.CREAM); s.draw(P, F, idx + 2, TOTAL); });
+    sections.forEach(function (s, idx) { var pg = doc.addPage([lx.A4.w, lx.A4.h]); var P = lx.mk(pg, doc); P.rect(0, 0, lx.A4.w, lx.A4.h, lx.COL.CREAM); s.draw(P, F, idx + 2, TOTAL, pics); });
     var bytes = await doc.save();
     lx.theme('luxury');
     if (m.returnBytes) return bytes;
