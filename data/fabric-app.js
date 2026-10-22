@@ -409,6 +409,8 @@
         '<span class="sep"></span>' +
         LED_PRESETS.map(function (p) { return '<button class="ghost sm tool-k" data-k="led-' + p.id + '" title="' + esc(p.note) + '" onclick="FabricApp.simMode(\'led\',\'' + p.id + '\')">+ LED · ' + esc(p.label) + '</button>'; }).join('') +
         '<span class="sep"></span>' +
+        '<button class="ghost sm tool-k" data-k="mask" title="Click round a sofa, TV or radiator standing in front of the wall — the fabric paints behind it" onclick="FabricApp.simMode(\'mask\')">+ Hide object</button>' +
+        '<span class="sep"></span>' +
         '<label class="sim-sl"><span>Dim room</span><input type="range" min="0" max="1" step="0.05" value="' + (cur.dim || 0) + '" oninput="FabricApp.simDim(this.value)"></label>' +
         '<label class="sim-sl"><span>LED</span><input type="range" min="0" max="1" step="0.05" value="1" oninput="FabricApp.simLedPct(this.value)"></label>' +
         '</div>';
@@ -456,6 +458,7 @@
     var el = $('simSel'), c = ctx.simCtl; if (!el || !c) return;
     var s = c.selected(), k = c.selectedKind(), rm = simRoom();
     if (!s) { el.innerHTML = '<div class="hint" style="margin:0">' + (c.count().walls ? 'Click a wall or an LED point to edit it · Delete removes it.' : 'Choose the surface, press + Fabric wall, then click its four corners in the photo.') + '</div>'; return; }
+    if (k === 'mask') { el.innerHTML = '<div class="sim-row"><b>Hidden object</b><label>Label <input value="' + esc(s.label || '') + '" style="width:120px" onchange="FabricApp.simSet(\'label\',this.value)"></label><span class="hint" style="margin:0">Fabric and light paint behind this shape · drag its points to fit</span><button class="ghost sm" onclick="FabricApp.simRemove()">Remove</button></div>'; return; }
     if (k === 'wall') {
       el.innerHTML = '<div class="sim-row"><b>Wall</b>' +
         '<label>Surface <select onchange="FabricApp.simWallSurface(this.value)"><option value="">—</option>' + rm.surfaces.filter(function (x) { return x.on; }).map(function (x) { return '<option value="' + x.id + '"' + (s.surfaceId === x.id ? ' selected' : '') + '>' + esc(x.label) + '</option>'; }).join('') + '</select></label>' +
@@ -506,7 +509,7 @@
     for (var i = 0; i < files.length; i++) {
       try {
         var url = URL.createObjectURL(files[i]), img = await global.SonorFabricSim.loadImg(url), r = rasterise(img, 1600, 'image/jpeg', 0.88); URL.revokeObjectURL(url);   // re-rasterised → EXIF / GPS dropped (§32)
-        var ph = { id: 'ph' + Date.now().toString(36) + i, src: r.dataUrl, w: r.w, h: r.h, dim: 0, walls: [], leds: [] };
+        var ph = { id: 'ph' + Date.now().toString(36) + i, src: r.dataUrl, w: r.w, h: r.h, dim: 0, walls: [], leds: [], masks: [] };
         rm.photos.push(ph); ctx.simPhotoId = ph.id;
         var stored = await uploadDataUrl('photos/' + projKey() + '/' + rm.id + '-' + ph.id + '.jpg', r.dataUrl);
         if (stored) { ph.src = stored; ph.path = stored.split('?')[0]; }
@@ -521,6 +524,7 @@
     var rm = simRoom(), btnKey = kind === 'wall' ? 'wall' : 'led-' + presetId;
     if (c.mode() && document.querySelector('.tool-k.on[data-k="' + btnKey + '"]')) { c.setMode(null); document.querySelectorAll('.tool-k').forEach(function (b) { b.classList.remove('on'); }); return; }
     document.querySelectorAll('.tool-k').forEach(function (b) { b.classList.toggle('on', b.dataset.k === btnKey); });
+    if (kind === 'mask') { c.setMode('mask', { label: 'Hidden' }); toast('Click round the object in front of the wall — close on the first point, double-click or Enter'); return; }
     if (kind === 'wall') { var sid = ($('simSurf') || {}).value || null; c.setMode('wall', wallPreset(rm, sid)); toast(sid ? 'Click the four corners of the ' + ((rm.surfaces.find(function (s) { return s.id === sid; }) || {}).label || 'wall').toLowerCase() : 'Click the four corners of the wall (pick a surface first for its panel seams)'); return; }
     var p = LED_PRESETS.find(function (x) { return x.id === presetId; }) || LED_PRESETS[0];
     c.setMode('led', { label: p.label, side: p.side, len: p.len, cct: 2700, intensity: 0.8 }); toast('Trace the LED line along the edge — click points, double-click or Enter to finish');
@@ -551,7 +555,7 @@
       if (f && !swatches.some(function (s) { return s.hex === hex; })) swatches.push({ name: f.name + (col ? ' ' + col : ''), hex: hex });
       return { name: rm.name, code: rm.code || null, floor_code: rm.floor_code || null, fabric: f ? f.name : null, fabricLine: f ? f.name + (col ? ' in ' + col : '') + ' (' + (f.manufacturer || 'Cineca') + (f.at ? ', acoustically transparent weave' : ', ' + (KIND_LABEL[f.kind] || 'fabric').toLowerCase()) + ') ' + hex : 'fabric to be selected', colour: col, hex: hex, at: !!(f && f.at), track: tr ? tr.name : null,
         surfaces: rm.surfaces.filter(function (s) { return s.on; }).map(function (s) { var sc = rc.surfaces.find(function (x) { return x.id === s.id; }) || {}; return { id: s.id, label: s.label, kind: s.kind, len_mm: s.len_mm, h_mm: s.h_mm, panels: sc.n_panels || 0, panel_w_mm: sc.panel_w_mm || 0, openings: (s.openings || []).map(function (o) { return { label: o.label, w: o.w, h: o.h, qty: o.qty }; }), cutouts: (s.cutouts || []).map(function (c) { return { kind: c.kind, qty: c.qty }; }) }; }),
-        photos: (rm.photos || []).map(function (p) { return { id: p.id, daySrc: p.src, simSrc: p.simSrc || null, guideSrc: null, walls: p.walls || [], leds: p.leds || [], _p: p }; }) };
+        photos: (rm.photos || []).map(function (p) { return { id: p.id, daySrc: p.src, simSrc: p.simSrc || null, guideSrc: null, walls: p.walls || [], leds: p.leds || [], masks: p.masks || [], _p: p }; }) };
     });
     var model = { ref: ctx.projectRef || '', consent: !!cfg.lab.consent, rooms: rooms, swatches: swatches };
     model.prepare = async function () {   // guides (+ a fresh sim where none was saved) rendered headless from the photo model
@@ -786,11 +790,13 @@
   async function openSaved(id) {
     var db = dbc(); if (!db) return;
     try {
-      var res = await db.from('fabric_configs').select('id,label,config').eq('id', id).single();
+      var res = await db.from('fabric_configs').select('id,label,config,project_id').eq('id', id).single();
       if (res.data && res.data.config) {
         var c = res.data.config;
         ['rooms', 'defaults', 'client', 'lab'].forEach(function (k) { if (c[k] != null) cfg[k] = c[k]; });
         cfg.lab = cfg.lab || { consent: false, consentAt: null };
+        // v0.3.0 — a design opened by deep link (?config=) carries its project: the row's project_id wins, the config's copy is the fallback
+        if (res.data.project_id || c.projectId) { var pidNew = res.data.project_id || c.projectId; if (cfg.projectId !== pidNew) { cfg.projectId = pidNew; await pullContext(); } }
         cfg._savedId = res.data.id; cfg._savedLabel = res.data.label || null;
         seedDefaults();
         cfg.step = STEPS.length; renderStep();

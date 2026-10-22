@@ -42,6 +42,7 @@
       '',
       'The fabric: ' + room.fabricLine + '. Velvet reads as a soft matt pile with a gentle directional sheen where the light catches it; a weave reads as a fine, even, matt textile. The wall still receives the room\'s real light and shadow.',
       '',
+      (ph.masks || []).length ? 'Objects standing in front of the wall (keep them exactly as photographed, the fabric runs behind them): ' + ph.masks.map(function (m) { return m.label || 'object'; }).join(', ') + '.\n' : '',
       leds.length ? 'Add these LED lines (switched on; the room otherwise lit as in [0], very slightly dimmed so the LED reads):\n' + leds.map(function (l) { return '- ' + l; }).join('\n') : 'No LED lighting in this view.',
       '',
       'Deliver: 16:9 at 2048 px on the long side, no text, no watermark, no people added. File name `' + pn + '-' + slug(room.name) + '-' + (i + 1) + '-render.jpg`.',
@@ -105,7 +106,7 @@
         try { files.push({ path: 'photos/' + ph.file, blob: await urlToBlob(ph.daySrc) }); } catch (e) { console.warn('[fabric-pack] photo', e); continue; }
         if (ph.guideSrc) files.push({ path: 'guides/' + ph.guideFile, blob: dataUrlToBlob(ph.guideSrc) });
         if (ph.simSrc) { try { files.push({ path: 'sims/' + ph.simFile, blob: await urlToBlob(ph.simSrc) }); } catch (e) {} }
-        br.photos.push({ file: ph.file, guide: ph.guideFile, sim: ph.simSrc ? ph.simFile : null, walls: (ph.walls || []).map(function (w, k) { return { id: 'W' + (k + 1), label: w.label, surface: w.surfaceId || null, quad: w.quad, fabric: w.fabricName || r.fabric, colour: w.colourName || r.colour, hex: w.hex, seams: w.seams || [], panels: (w.seams || []).length + 1 }; }), leds: (ph.leds || []).map(function (l, k) { return { id: 'L' + (k + 1), label: l.label, path: l.path, cct: l.cct || 2700, side: l.side == null ? 1 : l.side }; }) });
+        br.photos.push({ file: ph.file, guide: ph.guideFile, sim: ph.simSrc ? ph.simFile : null, walls: (ph.walls || []).map(function (w, k) { return { id: 'W' + (k + 1), label: w.label, surface: w.surfaceId || null, quad: w.quad, fabric: w.fabricName || r.fabric, colour: w.colourName || r.colour, hex: w.hex, seams: w.seams || [], panels: (w.seams || []).length + 1 }; }), leds: (ph.leds || []).map(function (l, k) { return { id: 'L' + (k + 1), label: l.label, path: l.path, cct: l.cct || 2700, side: l.side == null ? 1 : l.side }; }), in_front: (ph.masks || []).map(function (m) { return { label: m.label || 'object', polygon: m.points }; }) });
         prompts.push(promptFor(pn, r, ph, pi));
       }
       brief.rooms.push(br);
