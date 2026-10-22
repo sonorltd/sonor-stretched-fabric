@@ -31,6 +31,8 @@
   <script src="../data/fabric-draw.js"></script>
   <script src="../data/fabric-pdf.js"></script>
   <script src="../data/fabric-wq.js"></script>
+  <script src="../data/fabric-cost.js"></script>
+  <script src="../data/fabric-pack.js"></script>
   <script src="../data/fabric-sim.js"></script>          <!-- v0.3.0 — room photo simulator (Garden sim pattern) -->
   <script src="../data/fabric-render-pack.js"></script>  <!-- v0.3.0 — lab render pack (CD render-handoff pattern) -->
   <script src="../data/fabric-app.js"></script>
@@ -123,6 +125,7 @@
     .dim { font-size:11px; color:var(--muted); display:flex; align-items:center; gap:5px; } .dim input { width:76px; padding:5px 7px; }
     .sf-tot { font-size:11px; color:var(--gold2); flex:1; min-width:200px; } .sf-act { display:flex; gap:6px; margin-left:auto; }
     .chips { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 4px; }
+    .chip .sub { font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-left:4px; } .chip select.tag { font-size:10px; padding:3px 4px; } .chip.led { border-color:rgba(214,122,36,.45); } .chips.meta .chip > span:first-child { font-size:9px; letter-spacing:.1em; text-transform:uppercase; } .chip.note input { width:auto; }
     .chip { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--muted); background:var(--bg3); border:1px solid var(--brd2); border-radius:9px; padding:5px 7px; } .chip input { width:64px; padding:4px 6px; font-size:11px; } .chip input.q { width:44px; } .chip select { padding:4px 6px; font-size:11px; } .chip.co { border-color:rgba(173,153,120,.3); }
     .elev-wrap { margin-top:10px; max-width:680px; } .elev { display:block; max-height:300px; width:auto; max-width:100%; }
     /* v0.3.0 — photos step: simulator (Garden sim chrome), lab pack, render gallery */
@@ -275,7 +278,7 @@
   </div>
 
   <script>
-    const APP_VERSION = '0.3.1';
+    const APP_VERSION = '0.4.0';
     document.addEventListener('DOMContentLoaded', function(){ var v = document.getElementById('hdrVer'); if (v) v.textContent = 'v' + APP_VERSION; });
     (function(){ var cfg = window.__FABRIC_CONFIG__ || {}; var el = document.getElementById('heroBg'); if (el && cfg.heroImage) { el.classList.remove('grad'); el.style.backgroundImage = "url('" + cfg.heroImage + "')"; } })();
     SonorShell.mount({ appKey:'stretched-fabric', appName:'Stretched Fabric', repo:'sonor-stretched-fabric', version:APP_VERSION, faviconHref:'../data/favicon.svg', assetBase:'../data/', supabase:false, palette:{ self:'stretched-fabric' } });

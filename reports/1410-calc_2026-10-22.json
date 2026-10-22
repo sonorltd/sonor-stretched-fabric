@@ -1,0 +1,266 @@
+{
+ "basis": {
+  "totals": {
+   "surfaces": 5,
+   "walls": 5,
+   "ceilings": 0,
+   "net_m2": 28.74,
+   "gross_m2": 37.26,
+   "openings_m2": 8.52,
+   "panels": 5,
+   "track_m": 78.93,
+   "split_m": 0,
+   "fabric_lm": 18.6,
+   "fabric_m2_ordered": 55.78,
+   "infill_m2": 30.19,
+   "infill_boards": 42,
+   "cutouts": 6,
+   "openings": 4,
+   "screws": 527,
+   "labour_h": 37.8,
+   "flags": []
+  },
+  "surfaces": [
+   {
+    "id": "w1",
+    "label": "Feature wall (TV)",
+    "net": 9.13,
+    "gross": 11.8,
+    "open": 2.67,
+    "panels": 1,
+    "panel_w": 5000,
+    "orient": "railroad",
+    "track": {
+     "perimeter_m": 14.72,
+     "split_m": 0,
+     "openings_m": 10.17,
+     "total_m": 24.89
+    },
+    "fabric": {
+     "roll_width_m": 3,
+     "orientation": "railroad",
+     "cut_lm": 5.2,
+     "order_lm": 5.72,
+     "m2_net": 9.13,
+     "m2_gross": 11.8,
+     "m2_ordered": 17.16,
+     "waste_pct": 10
+    },
+    "flags": []
+   },
+   {
+    "id": "w2",
+    "label": "Wall 2 (right)",
+    "net": 9.08,
+    "gross": 10.97,
+    "open": 1.89,
+    "panels": 1,
+    "panel_w": 4650,
+    "orient": "railroad",
+    "track": {
+     "perimeter_m": 14.02,
+     "split_m": 0,
+     "openings_m": 6,
+     "total_m": 20.02
+    },
+    "fabric": {
+     "roll_width_m": 3,
+     "orientation": "railroad",
+     "cut_lm": 4.85,
+     "order_lm": 5.34,
+     "m2_net": 9.08,
+     "m2_gross": 10.97,
+     "m2_ordered": 16.01,
+     "waste_pct": 10
+    },
+    "flags": []
+   },
+   {
+    "id": "p1",
+    "label": "Rear pillar (left of window)",
+    "net": 1.76,
+    "gross": 1.76,
+    "open": 0,
+    "panels": 1,
+    "panel_w": 800,
+    "orient": "railroad",
+    "track": {
+     "perimeter_m": 6,
+     "split_m": 0,
+     "openings_m": 0,
+     "total_m": 6
+    },
+    "fabric": {
+     "roll_width_m": 3,
+     "orientation": "railroad",
+     "cut_lm": 1,
+     "order_lm": 1.1,
+     "m2_net": 1.76,
+     "m2_gross": 1.76,
+     "m2_ordered": 3.3,
+     "waste_pct": 10
+    },
+    "flags": []
+   },
+   {
+    "id": "p2",
+    "label": "Rear pillar (right of window)",
+    "net": 1.76,
+    "gross": 1.76,
+    "open": 0,
+    "panels": 1,
+    "panel_w": 800,
+    "orient": "railroad",
+    "track": {
+     "perimeter_m": 6,
+     "split_m": 0,
+     "openings_m": 0,
+     "total_m": 6
+    },
+    "fabric": {
+     "roll_width_m": 3,
+     "orientation": "railroad",
+     "cut_lm": 1,
+     "order_lm": 1.1,
+     "m2_net": 1.76,
+     "m2_gross": 1.76,
+     "m2_ordered": 3.3,
+     "waste_pct": 10
+    },
+    "flags": []
+   },
+   {
+    "id": "w4",
+    "label": "Wall 4 (left / garden)",
+    "net": 7.01,
+    "gross": 10.97,
+    "open": 3.96,
+    "panels": 1,
+    "panel_w": 4650,
+    "orient": "railroad",
+    "track": {
+     "perimeter_m": 14.02,
+     "split_m": 0,
+     "openings_m": 8,
+     "total_m": 22.02
+    },
+    "fabric": {
+     "roll_width_m": 3,
+     "orientation": "railroad",
+     "cut_lm": 4.85,
+     "order_lm": 5.34,
+     "m2_net": 7.01,
+     "m2_gross": 10.97,
+     "m2_ordered": 16.01,
+     "waste_pct": 10
+    },
+    "flags": []
+   }
+  ]
+ },
+ "alt": {
+  "totals": {
+   "surfaces": 3,
+   "walls": 3,
+   "ceilings": 0,
+   "net_m2": 12.65,
+   "gross_m2": 15.32,
+   "openings_m2": 2.67,
+   "panels": 3,
+   "track_m": 36.89,
+   "split_m": 0,
+   "fabric_lm": 7.92,
+   "fabric_m2_ordered": 23.76,
+   "infill_m2": 13.29,
+   "infill_boards": 19,
+   "cutouts": 6,
+   "openings": 2,
+   "screws": 246,
+   "labour_h": 18.1,
+   "flags": []
+  },
+  "surfaces": [
+   {
+    "id": "w1",
+    "label": "Feature wall (TV)",
+    "net": 9.13,
+    "gross": 11.8,
+    "open": 2.67,
+    "panels": 1,
+    "panel_w": 5000,
+    "orient": "railroad",
+    "track": {
+     "perimeter_m": 14.72,
+     "split_m": 0,
+     "openings_m": 10.17,
+     "total_m": 24.89
+    },
+    "fabric": {
+     "roll_width_m": 3,
+     "orientation": "railroad",
+     "cut_lm": 5.2,
+     "order_lm": 5.72,
+     "m2_net": 9.13,
+     "m2_gross": 11.8,
+     "m2_ordered": 17.16,
+     "waste_pct": 10
+    },
+    "flags": []
+   },
+   {
+    "id": "p1",
+    "label": "Rear pillar (left of window)",
+    "net": 1.76,
+    "gross": 1.76,
+    "open": 0,
+    "panels": 1,
+    "panel_w": 800,
+    "orient": "railroad",
+    "track": {
+     "perimeter_m": 6,
+     "split_m": 0,
+     "openings_m": 0,
+     "total_m": 6
+    },
+    "fabric": {
+     "roll_width_m": 3,
+     "orientation": "railroad",
+     "cut_lm": 1,
+     "order_lm": 1.1,
+     "m2_net": 1.76,
+     "m2_gross": 1.76,
+     "m2_ordered": 3.3,
+     "waste_pct": 10
+    },
+    "flags": []
+   },
+   {
+    "id": "p2",
+    "label": "Rear pillar (right of window)",
+    "net": 1.76,
+    "gross": 1.76,
+    "open": 0,
+    "panels": 1,
+    "panel_w": 800,
+    "orient": "railroad",
+    "track": {
+     "perimeter_m": 6,
+     "split_m": 0,
+     "openings_m": 0,
+     "total_m": 6
+    },
+    "fabric": {
+     "roll_width_m": 3,
+     "orientation": "railroad",
+     "cut_lm": 1,
+     "order_lm": 1.1,
+     "m2_net": 1.76,
+     "m2_gross": 1.76,
+     "m2_ordered": 3.3,
+     "waste_pct": 10
+    },
+    "flags": []
+   }
+  ]
+ }
+}

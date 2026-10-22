@@ -1,4 +1,4 @@
-/* Sonor Stretched Fabric — STRETCHED FABRIC PROPOSAL + internal CUT LIST (v0.3.0)
+/* Sonor Stretched Fabric — STRETCHED FABRIC PROPOSAL + internal CUT LIST (v0.4.0 — internal costing block)
    FabricPdf.generate(model) — built ENTIRELY on the shared SonorPdfLuxury chrome (data/sonor-pdf-luxury.js
    root master). Cover = the Service Contracts cover (sonor-platform §43: contract-hero.jpg, brandLarge, airy,
    CEDIA strip) — every client-facing Sonor document shares it. Client proposal = luxury (cream) theme — this is
@@ -248,10 +248,20 @@
       y = Math.max(y, 176);
       var rows = [['Fabric to order', fmt(t.fabric_lm, 1) + ' lm', fmt(t.fabric_m2_ordered, 1) + ' sqm · ' + fmt(t.net_m2, 1) + ' sqm finished'], ['Perimeter + opening track', fmt(t.track_m - t.split_m, 1) + ' m', ''], ['Split track', fmt(t.split_m, 1) + ' m', t.panels + ' panels'], ['Acoustic infill', t.infill_m2 ? fmt(t.infill_m2, 1) + ' sqm' : '—', t.infill_boards ? t.infill_boards + ' boards' : ''], ['Track fixings', t.screws + ' screws', '150 mm pitch'], ['Device cut-outs', String(t.cutouts || 0), ''], ['Labour estimate', fmt(t.labour_h, 1) + ' h', 'walls / ceilings / panels / cut-outs / track — internal only']];
       y = table(P, F, lx, [{ label: 'Item', w: W * 0.34 }, { label: 'Qty', w: W * 0.22, align: 'right' }, { label: 'Note', w: W * 0.44 }], rows, y);
+      // v0.4.0 — internal costing (Library trade prices × quantities + labour + extras) — the figures behind a single-line push
+      if (m.costing && m.costing.totals && m.costing.totals.sell) {
+        var K = global.SonorFabricCost, money = K ? K.money : function (v) { return '£' + fmt(v, 2); }, T = m.costing.totals;
+        y += 10; y = rule(P, F, lx, 'INTERNAL COSTING · £' + fmt(T.sell, 0) + ' SELL · £' + fmt(T.cost, 0) + ' COST · MARGIN ' + (T.margin_pct == null ? '—' : fmt(T.margin_pct, 1) + '%'), y);
+        var crows = [];
+        m.costing.rooms.forEach(function (r) { r.lines.forEach(function (ln) { crows.push([ln.label + (ln.tbc ? ' (rate TBC)' : ''), fmt(ln.qty, 2) + ' ' + (ln.unit === 'm2' ? 'sqm' : ln.unit), ln.rate != null ? money(ln.rate) : '—', money(ln.cost), money(ln.sell)]); }); var tr = [r.name + ' — total' + (r.sell_per_m2 ? ' · ' + money(r.sell_per_m2) + '/sqm all-in' : ''), fmt(r.net_m2, 2) + ' sqm net', '', money(r.cost), money(r.sell)]; tr.__bold = true; crows.push(tr); });
+        y = table(P, F, lx, [{ label: 'Line', w: W * 0.40 }, { label: 'Qty', w: W * 0.16, align: 'right' }, { label: 'Rate', w: W * 0.14, align: 'right' }, { label: 'Cost', w: W * 0.15, align: 'right' }, { label: 'Sell', w: W * 0.15, align: 'right' }], crows.slice(0, 14), y, { size: 8.5 });
+        P.text('Labour ' + fmt(T.labour_h, 1) + ' h at ' + money(m.costing.rates.labourCostRate) + ' / ' + money(m.costing.rates.labourSellRate) + ' per hour · materials margin ' + fmt(m.costing.rates.marginPct, 0) + '% · ' + (T.tbc.length ? T.tbc.length + ' line(s) without a Library price' : 'all rates from the Library'), M, y + 2, 7.5, F.r, COL.MUT);
+        y += 16;
+      }
       if (m.wq) {
         y += 10; y = rule(P, F, lx, 'WEQUOTE PLAN' + (m.wq.quote ? ' · QUOTE #' + (m.wq.quote.no || m.wq.quote.id) : ' · NO QUOTE PAIRED'), y);
         var wrows = [];
-        m.wq.floors.forEach(function (fl) { fl.rooms.forEach(function (r) { r.lines.forEach(function (ln) { wrows.push([fl.code + ' · ' + r.name, ln.name, fmt(ln.qty, 2) + ' ' + (ln.unit === 'm2' ? 'sqm' : ln.unit), '#' + ln.product_id + (ln.kind === 'estimate' ? ' (generic)' : '')]); }); }); });
+        m.wq.floors.forEach(function (fl) { fl.rooms.forEach(function (r) { r.lines.forEach(function (ln) { wrows.push([fl.code + ' · ' + r.name, ln.name + (ln.single ? ' — single line £' + fmt(ln.sell, 2) + (ln.unit === 'm2' ? '/sqm' : '') + ' sell' : ''), fmt(ln.qty, 2) + ' ' + (ln.unit === 'm2' ? 'sqm' : ln.unit), '#' + ln.product_id + (ln.kind === 'estimate' ? ' (generic)' : '')]); }); }); });
         (m.wq.unmapped || []).forEach(function (u) { wrows.push(['—', u.label, fmt(u.qty, 2) + ' ' + (u.unit === 'm2' ? 'sqm' : u.unit), 'NO PRODUCT']); });
         if (wrows.length) y = table(P, F, lx, [{ label: 'Area', w: W * 0.24 }, { label: 'WeQuote product', w: W * 0.40 }, { label: 'Qty', w: W * 0.16, align: 'right' }, { label: 'Product id', w: W * 0.20, align: 'right' }], wrows.slice(0, 18), y, { size: 8.5 });
       }

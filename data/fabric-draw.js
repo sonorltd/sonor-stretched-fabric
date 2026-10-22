@@ -16,8 +16,10 @@
       for (var i = 0; i < op.qty; i++) {
         if (x + op.w > len - 150) x = Math.max(150, len - op.w - 150);
         var y = (/door/i.test(op.label) && calc.kind === 'wall') ? h - op.h : (calc.kind === 'ceiling' ? Math.max(150, (h - op.h) / 2) : Math.max(300, (h - op.h) / 2));
-        out.push({ x: x, y: Math.max(0, y), w: op.w, h: op.h, label: op.label });
-        x += op.w + 300;
+        // v0.4.0 — a recorded set-out wins: x_mm from the left edge, y_mm = sill from FFL (drawing y runs down from the top)
+        var sx = op.x_mm != null ? op.x_mm + i * (op.w + 300) : x, sy = op.y_mm != null ? h - op.y_mm - op.h : y;
+        out.push({ x: sx, y: Math.max(0, sy), w: op.w, h: op.h, label: op.label, set: op.x_mm != null });
+        x = sx + op.w + 300;
       }
     });
     return out;

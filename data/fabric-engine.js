@@ -69,6 +69,8 @@
         it.thickness_mm = num(md.thickness_mm, null);
         it.board_mm = Array.isArray(md.board_mm) ? md.board_mm : (CFG.calc && CFG.calc.infillBoardMm) || [1200, 600];
       }
+      // v0.4.0 — Library trade price (Cineca pricelist filed 2026-10-22): {trade, unit 'm2'|'m'|'each', min_order, length_mm} — null when the sheet has no price (Lines FR)
+      it.price = md.price_trade_gbp != null && isFinite(Number(md.price_trade_gbp)) ? { trade: Number(md.price_trade_gbp), unit: md.price_unit || (r.category === CATS.track ? 'm' : 'm2'), min_order: md.min_order || null, length_mm: num(md.length_mm, null), note: md.price_note || null } : null;
       if (md.wq && md.wq.product_id) it.wq = { product_id: Number(md.wq.product_id), unit: md.wq.unit || null, description: md.wq.description || null };
       return it;
     });

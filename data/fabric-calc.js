@@ -53,7 +53,8 @@
     // openings (doors / windows / screens) — subtract area, add track around each
     var openings = (s.openings || []).map(function (op) {
       var q = Math.max(0, Math.round(n(op.qty, 1))), w = Math.max(0, n(op.w, 0)), hh = Math.max(0, n(op.h, 0));
-      return { label: op.label || 'Opening', w: w, h: hh, qty: q, area_m2: r2(w * hh * q / 1e6), track_m: r2(2 * (w + hh) * q / 1000) };
+      return { label: op.label || 'Opening', w: w, h: hh, qty: q, area_m2: r2(w * hh * q / 1e6), track_m: r2(2 * (w + hh) * q / 1000),
+        x_mm: op.x_mm == null || op.x_mm === '' ? null : n(op.x_mm, null), y_mm: op.y_mm == null || op.y_mm === '' ? null : n(op.y_mm, null), src: op.src || null, frame_mm: n(op.frame_mm, 0) || 0, note: op.note || null };   // v0.4.0 — set-out + provenance ride through to the pack
     }).filter(function (op) { return op.qty > 0 && op.w > 0 && op.h > 0; });
     var openingsM2 = openings.reduce(function (a, op) { return a + op.area_m2; }, 0);
     var openingsTrackM = openings.reduce(function (a, op) { return a + op.track_m; }, 0);
@@ -120,7 +121,7 @@
     var labourH = netM2 * (s.kind === 'ceiling' ? L.ceilingM2 : L.wallM2) + nPanels * L.perPanel + cutoutsN * L.perCutout + openingsN * L.perOpening + trackTotalM * L.trackM;
 
     return {
-      id: s.id || null, label: s.label || null, kind: s.kind === 'ceiling' ? 'ceiling' : 'wall',
+      id: s.id || null, label: s.label || null, kind: s.kind === 'ceiling' ? 'ceiling' : 'wall', side: s.side || null, src: s.src || null, frame_mm: n(s.frame_mm, 0) || 0, leds: Array.isArray(s.leds) ? s.leds : [],
       len_mm: len, h_mm: h, flags: flags,
       gross_m2: r2(grossM2), openings_m2: r2(openingsM2), net_m2: r2(netM2),
       openings: openings, n_openings: openingsN,
@@ -133,7 +134,7 @@
     };
   }
   function empty(s, o, flags) {
-    return { id: s.id || null, label: s.label || null, kind: s.kind === 'ceiling' ? 'ceiling' : 'wall', len_mm: n(s.len_mm, 0), h_mm: n(s.h_mm, 0), flags: flags || [],
+    return { id: s.id || null, label: s.label || null, kind: s.kind === 'ceiling' ? 'ceiling' : 'wall', side: s.side || null, src: s.src || null, frame_mm: n(s.frame_mm, 0) || 0, leds: Array.isArray(s.leds) ? s.leds : [], len_mm: n(s.len_mm, 0), h_mm: n(s.h_mm, 0), flags: flags || [],
       gross_m2: 0, openings_m2: 0, net_m2: 0, openings: [], n_openings: 0, panels: [], n_panels: 0, panel_w_mm: 0, orientation: o.orientation,
       track: { perimeter_m: 0, split_m: 0, openings_m: 0, total_m: 0 }, fabric: { roll_width_m: r2(o.rollWidthMm / 1000), orientation: o.orientation, cut_lm: 0, order_lm: 0, m2_net: 0, m2_gross: 0, m2_ordered: 0, waste_pct: o.wastePct },
       infill: null, cutouts: [], n_cutouts: 0, fixings: { screws: 0, pitch_mm: o.screwPitchMm }, labour_h: 0 };
@@ -205,7 +206,7 @@
     ];
   }
 
-  var API = { calcSurface: calcSurface, calcRoom: calcRoom, calcProject: calcProject, wallsFromPolygon: wallsFromPolygon, surfacesFromRect: surfacesFromRect, defaults: defaults, __version: '0.1.0' };
+  var API = { calcSurface: calcSurface, calcRoom: calcRoom, calcProject: calcProject, wallsFromPolygon: wallsFromPolygon, surfacesFromRect: surfacesFromRect, defaults: defaults, __version: '0.4.0' };
   global.SonorFabricCalc = API;
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
 })(typeof window !== 'undefined' ? window : globalThis);

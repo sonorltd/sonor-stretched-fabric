@@ -27,6 +27,12 @@
     defaults: { fabricId: null, colour: null, trackId: null, infillId: null, orientation: 'drop', wastePct: null, gripMm: null, panelMaxMm: null },
     client: { name: '', project: '' },
     lab: { consent: false, consentAt: null },   // v0.3.0: per-project consent to send room photos to the render lab (§32)
+    // v0.4.0 — internal costing (Library trade prices + labour) and the WeQuote push mode: 'itemised' (fabric / track / infill /
+    // cut-outs lines, prices resolve in WeQuote) or 'single' (ONE priced line per room from the costing — Bryn 2026-10-22)
+    cost: { labourCostRate: null, labourSellRate: null, marginPct: null, overrides: {}, extras: [] },
+    wqMode: 'itemised',
+    // v0.4.0 — design & dimension pack (A3): revision, option name, scheme copy (fabric-pack.js)
+    pack: { rev: 'R1', option: '', scheme: { title: '', blurb: '', fabric: '', borders: '', light: '', subtitle: '' }, compare: null },
     projectId: null, _savedId: null, _savedLabel: null, _lastRef: null
   };
   var ctx = { rooms: null, cinema: null, cinemaMaterials: null, heightMm: null, brief: null, projectRef: null, spec: null, wqLinks: null, wqQuote: null, wqStatus: '', renders: null, simCtl: null, simRoomId: null, simPhotoId: null };
@@ -335,16 +341,37 @@
         '<label><span>Track</span><select onchange="FabricApp.setRoom(' + ri + ',\'trackId\',this.value)"><option value="">Project default — ' + esc(tr && !rm.trackId ? tr.name : '') + '</option>' + E.tracks().filter(function (t) { return t.role !== 'split'; }).map(function (x) { return '<option value="' + x.id + '"' + (rm.trackId === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></label>' +
         '<label><span>Orientation</span><select onchange="FabricApp.setRoom(' + ri + ',\'orientation\',this.value)"><option value="">Project default</option>' + (CFG.orientations || []).map(function (x) { return '<option value="' + x.id + '"' + (rm.orientation === x.id ? ' selected' : '') + '>' + esc(x.label) + '</option>'; }).join('') + '</select></label>' +
         '<div class="hint" style="margin:0;align-self:center">' + (f ? esc(f.name) + (roomColour(rm) ? ' · ' + esc(roomColour(rm)) : '') + ' · ' + o.rollWidthMm + ' mm roll' : '') + (inf ? ' · ' + esc(inf.name) : '') + '</div></div>';
+      // v0.4.0 — pack set-out that is not a fabric surface: existing ceiling coffer (RCP + LED), a rear opening between pillars
+      if (!CLIENT) {
+        var pk = rm.pack = rm.pack || {}, cf = pk.coffer = pk.coffer || {}, ro = pk.rearOpening = pk.rearOpening || {};
+        h += '<div class="chips meta"><span class="chip"><span>ceiling coffer</span> x <input type="number" value="' + (cf.x == null ? '' : cf.x) + '" onchange="FabricApp.setPack(' + ri + ',\'coffer\',\'x\',this.value)"> y <input type="number" value="' + (cf.y == null ? '' : cf.y) + '" onchange="FabricApp.setPack(' + ri + ',\'coffer\',\'y\',this.value)"> w <input type="number" value="' + (cf.w == null ? '' : cf.w) + '" onchange="FabricApp.setPack(' + ri + ',\'coffer\',\'w\',this.value)"> h <input type="number" value="' + (cf.h == null ? '' : cf.h) + '" onchange="FabricApp.setPack(' + ri + ',\'coffer\',\'h\',this.value)"> LED inset <input type="number" class="q" value="' + (cf.inset_mm == null ? '' : cf.inset_mm) + '" placeholder="50" onchange="FabricApp.setPack(' + ri + ',\'coffer\',\'inset_mm\',this.value)"> grp <input class="q" value="' + esc(cf.group || '') + '" onchange="FabricApp.setPack(' + ri + ',\'coffer\',\'group\',this.value)">' + tagSel('FabricApp.setPack(' + ri + ',\'coffer\',\'src\',this.value)', cf.src || '') + '</span>' +
+          '<span class="chip"><span>rear opening</span> <input value="' + esc(ro.label || '') + '" placeholder="Window" style="width:80px" onchange="FabricApp.setPack(' + ri + ',\'rearOpening\',\'label\',this.value)"> w <input type="number" value="' + (ro.w == null ? '' : ro.w) + '" onchange="FabricApp.setPack(' + ri + ',\'rearOpening\',\'w\',this.value)"> h <input type="number" value="' + (ro.h == null ? '' : ro.h) + '" onchange="FabricApp.setPack(' + ri + ',\'rearOpening\',\'h\',this.value)"> sill <input type="number" value="' + (ro.sill == null ? '' : ro.sill) + '" onchange="FabricApp.setPack(' + ri + ',\'rearOpening\',\'sill\',this.value)"> x <input type="number" value="' + (ro.x == null ? '' : ro.x) + '" placeholder="centred" onchange="FabricApp.setPack(' + ri + ',\'rearOpening\',\'x\',this.value)">' + tagSel('FabricApp.setPack(' + ri + ',\'rearOpening\',\'src\',this.value)', ro.src || '') + '</span>' +
+          '<span class="chip"><span>room tag</span>' + tagSel('FabricApp.setRoom(' + ri + ',\'src\',this.value)', rm.src || '') + '</span></div>';
+      }
       // surfaces
       rm.surfaces.forEach(function (s, si) {
         var sc = rc.surfaces.find(function (x) { return x.id === s.id; });
         h += '<div class="sf-row' + (s.on ? '' : ' off') + '"><div class="sf-head"><label class="sf"><input type="checkbox" ' + (s.on ? 'checked' : '') + ' onchange="FabricApp.toggleSurface(' + ri + ',' + si + ',this.checked)"><b>' + esc(s.label) + '</b></label>' +
           '<span class="dim"><input type="number" value="' + s.len_mm + '" onchange="FabricApp.setSurface(' + ri + ',' + si + ',\'len_mm\',this.value)"> × <input type="number" value="' + s.h_mm + '" onchange="FabricApp.setSurface(' + ri + ',' + si + ',\'h_mm\',this.value)"> mm</span>' +
           (sc ? '<span class="sf-tot">' + fmt(sc.net_m2, 1) + ' m² · ' + sc.n_panels + ' × ' + sc.panel_w_mm + ' mm · ' + fmt(sc.track.total_m, 1) + ' m track' + (sc.flags.length ? ' · <span class="warn">' + esc(sc.flags.join('; ')) + '</span>' : '') + '</span>' : '') +
-          '<span class="sf-act"><button class="ghost sm" onclick="FabricApp.addOpening(' + ri + ',' + si + ')">+ Opening</button><button class="ghost sm" onclick="FabricApp.addCutout(' + ri + ',' + si + ')">+ Cut-out</button></span></div>';
+          '<span class="sf-act"><button class="ghost sm" onclick="FabricApp.addOpening(' + ri + ',' + si + ')">+ Opening</button><button class="ghost sm" onclick="FabricApp.addCutout(' + ri + ',' + si + ')">+ Cut-out</button><button class="ghost sm" onclick="FabricApp.addLed(' + ri + ',' + si + ')">+ LED</button></span></div>';
+        // v0.4.0 — set-out meta for the design & dimension pack: which side of the room, provenance tag, black border face, pillar offset / base
+        if (s.on) h += '<div class="chips meta"><span class="chip"><span>side</span><select onchange="FabricApp.setSurfaceMeta(' + ri + ',' + si + ',\'side\',this.value)">' + ['', 'front', 'right', 'rear', 'left', 'ceiling'].map(function (x) { return '<option value="' + x + '"' + ((s.side || '') === x ? ' selected' : '') + '>' + (x || 'auto') + '</option>'; }).join('') + '</select></span>' +
+          '<span class="chip"><span>tag</span>' + tagSel('FabricApp.setSurfaceMeta(' + ri + ',' + si + ',\'src\',this.value)', s.src || '') + '</span>' +
+          '<span class="chip"><span>black border</span><input type="number" value="' + (s.frame_mm || '') + '" placeholder="0" onchange="FabricApp.setSurfaceMeta(' + ri + ',' + si + ',\'frame_mm\',this.value)"> mm</span>' +
+          (s.len_mm < Math.max(rm.w_mm || 0, rm.d_mm || 0) * 0.6 ? '<span class="chip"><span>offset</span><input type="number" value="' + (s.offset_mm == null ? '' : s.offset_mm) + '" placeholder="auto" onchange="FabricApp.setSurfaceMeta(' + ri + ',' + si + ',\'offset_mm\',this.value)"> · base <input type="number" value="' + (s.base_mm == null ? '' : s.base_mm) + '" placeholder="100" onchange="FabricApp.setSurfaceMeta(' + ri + ',' + si + ',\'base_mm\',this.value)"> · proj <input type="number" value="' + (s.proj_mm == null ? '' : s.proj_mm) + '" placeholder="150" onchange="FabricApp.setSurfaceMeta(' + ri + ',' + si + ',\'proj_mm\',this.value)"> mm</span>' : '') +
+          '<span class="chip note"><input value="' + esc(s.note || '') + '" placeholder="note for the pack" style="width:260px" onchange="FabricApp.setSurfaceMeta(' + ri + ',' + si + ',\'note\',this.value)"></span></div>';
         if (s.on && sc) {
           var chips = '';
-          (s.openings || []).forEach(function (op, oi) { chips += '<span class="chip"><select onchange="FabricApp.setOpening(' + ri + ',' + si + ',' + oi + ',\'label\',this.value)">' + (CFG.openingPresets || []).map(function (p) { return '<option' + (op.label === p.label ? ' selected' : '') + '>' + esc(p.label) + '</option>'; }).join('') + '</select><input type="number" value="' + op.w + '" onchange="FabricApp.setOpening(' + ri + ',' + si + ',' + oi + ',\'w\',this.value)">×<input type="number" value="' + op.h + '" onchange="FabricApp.setOpening(' + ri + ',' + si + ',' + oi + ',\'h\',this.value)"> ×<input type="number" class="q" value="' + op.qty + '" onchange="FabricApp.setOpening(' + ri + ',' + si + ',' + oi + ',\'qty\',this.value)"><button class="x" onclick="FabricApp.removeOpening(' + ri + ',' + si + ',' + oi + ')">×</button></span>'; });
+          (s.openings || []).forEach(function (op, oi) { chips += '<span class="chip"><select onchange="FabricApp.setOpening(' + ri + ',' + si + ',' + oi + ',\'label\',this.value)">' + (CFG.openingPresets || []).map(function (p) { return '<option' + (op.label === p.label ? ' selected' : '') + '>' + esc(p.label) + '</option>'; }).join('') + '</select><input type="number" value="' + op.w + '" onchange="FabricApp.setOpening(' + ri + ',' + si + ',' + oi + ',\'w\',this.value)">×<input type="number" value="' + op.h + '" onchange="FabricApp.setOpening(' + ri + ',' + si + ',' + oi + ',\'h\',this.value)"> ×<input type="number" class="q" value="' + op.qty + '" onchange="FabricApp.setOpening(' + ri + ',' + si + ',' + oi + ',\'qty\',this.value)">' +
+            ' <span class="sub">left</span><input type="number" value="' + (op.x_mm == null ? '' : op.x_mm) + '" placeholder="auto" onchange="FabricApp.setOpening(' + ri + ',' + si + ',' + oi + ',\'x_mm\',this.value)"><span class="sub">sill</span><input type="number" value="' + (op.y_mm == null ? '' : op.y_mm) + '" placeholder="auto" onchange="FabricApp.setOpening(' + ri + ',' + si + ',' + oi + ',\'y_mm\',this.value)"><span class="sub">frame</span><input type="number" class="q" value="' + (op.frame_mm || '') + '" placeholder="0" onchange="FabricApp.setOpening(' + ri + ',' + si + ',' + oi + ',\'frame_mm\',this.value)">' + tagSel('FabricApp.setOpening(' + ri + ',' + si + ',' + oi + ',\'src\',this.value)', op.src || '') +
+            '<button class="x" onclick="FabricApp.removeOpening(' + ri + ',' + si + ',' + oi + ')">×</button></span>'; });
+          (s.leds || []).forEach(function (l, li) { chips += '<span class="chip led"><select onchange="FabricApp.setLed(' + ri + ',' + si + ',' + li + ',\'type\',this.value)">' + LED_TYPES.map(function (t) { return '<option value="' + t.id + '"' + (l.type === t.id ? ' selected' : '') + '>' + esc(t.label) + '</option>'; }).join('') + '</select>' +
+            '<span class="sub">grp</span><input class="q" value="' + esc(l.group || '') + '" placeholder="L1" onchange="FabricApp.setLed(' + ri + ',' + si + ',' + li + ',\'group\',this.value)">' +
+            (/perimeter|vertical|horizontal|halo/.test(l.type) ? '<span class="sub">inset</span><input type="number" class="q" value="' + (l.inset_mm == null ? '' : l.inset_mm) + '" placeholder="100" onchange="FabricApp.setLed(' + ri + ',' + si + ',' + li + ',\'inset_mm\',this.value)">' : '') +
+            (l.type === 'vertical' ? '<span class="sub">x</span><input type="number" value="' + (l.x_mm == null ? '' : l.x_mm) + '" onchange="FabricApp.setLed(' + ri + ',' + si + ',' + li + ',\'x_mm\',this.value)">' : '') +
+            (/halo|inside/.test(l.type) ? '<span class="sub">opening</span><select onchange="FabricApp.setLed(' + ri + ',' + si + ',' + li + ',\'ref\',this.value)">' + (s.openings || []).map(function (o, k) { return '<option value="' + k + '"' + ((l.ref || 0) === k ? ' selected' : '') + '>' + esc(o.label) + '</option>'; }).join('') + '</select>' : '') +
+            '<input value="' + esc(l.intent || '') + '" placeholder="intent" style="width:150px" onchange="FabricApp.setLed(' + ri + ',' + si + ',' + li + ',\'intent\',this.value)"><button class="x" onclick="FabricApp.removeLed(' + ri + ',' + si + ',' + li + ')">×</button></span>'; });
           (s.cutouts || []).forEach(function (c, ci) { chips += '<span class="chip co"><select onchange="FabricApp.setCutout(' + ri + ',' + si + ',' + ci + ',\'kind\',this.value)">' + (CFG.cutoutKinds || []).map(function (k) { return '<option value="' + k.id + '"' + (c.kind === k.id ? ' selected' : '') + '>' + esc(k.label) + '</option>'; }).join('') + '</select>×<input type="number" class="q" value="' + c.qty + '" onchange="FabricApp.setCutout(' + ri + ',' + si + ',' + ci + ',\'qty\',this.value)"><button class="x" onclick="FabricApp.removeCutout(' + ri + ',' + si + ',' + ci + ')">×</button></span>'; });
           if (chips) h += '<div class="chips">' + chips + '</div>';
           h += '<div class="elev-wrap">' + D.svg(s, sc, { width: 640 }) + '</div>';
@@ -363,6 +390,22 @@
   function addCutout(ri, si) { var s = cfg.rooms[ri].surfaces[si]; (s.cutouts = s.cutouts || []).push({ kind: 'speaker', qty: 2 }); s.on = true; renderStep(); }
   function setCutout(ri, si, ci, k, v) { var c = cfg.rooms[ri].surfaces[si].cutouts[ci]; if (!c) return; c[k] = k === 'qty' ? Math.max(0, Math.round(num(v, c.qty))) : v; renderStep(); }
   function removeCutout(ri, si, ci) { cfg.rooms[ri].surfaces[si].cutouts.splice(ci, 1); renderStep(); }
+  // v0.4.0 — set-out meta (pack): provenance tags S/P/A/D, LED routes per surface, room-level coffer / rear opening
+  var TAG_OPTS = [['', 'tag'], ['S', 'S supplied'], ['P', 'P proposal'], ['A', 'A assumed'], ['D', 'D derived']];
+  function tagSel(onchange, cur) { return '<select class="tag" onchange="' + onchange + '">' + TAG_OPTS.map(function (t) { return '<option value="' + t[0] + '"' + (cur === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select>'; }
+  var LED_TYPES = [{ id: 'perimeter', label: 'Perimeter LED' }, { id: 'vertical', label: 'Inset vertical' }, { id: 'horizontal', label: 'Inset horizontal' }, { id: 'halo', label: 'Halo (behind opening)' }, { id: 'inside', label: 'Inside recess (top lip)' }, { id: 'frame', label: 'Frame, inward wash' }];
+  function setSurfaceMeta(ri, si, k, v) { var s = cfg.rooms[ri] && cfg.rooms[ri].surfaces[si]; if (!s) return; if (/_mm$/.test(k)) s[k] = v === '' ? null : Math.max(0, num(v, 0)); else s[k] = v || null; renderStep(); }
+  function addLed(ri, si) { var s = cfg.rooms[ri].surfaces[si]; (s.leds = s.leds || []).push({ type: 'perimeter', inset_mm: 100, group: 'L' + (cfg.rooms.reduce(function (a, r) { return a + r.surfaces.reduce(function (b, x) { return b + ((x.leds || []).length); }, 0); }, 0) + 1), ref: 0, intent: '' }); renderStep(); }
+  function setLed(ri, si, li, k, v) { var l = cfg.rooms[ri].surfaces[si].leds[li]; if (!l) return; if (k === 'ref') l.ref = Math.max(0, Math.round(num(v, 0))); else if (/_mm$/.test(k)) l[k] = v === '' ? null : Math.max(0, num(v, 0)); else l[k] = v; renderStep(); }
+  function removeLed(ri, si, li) { cfg.rooms[ri].surfaces[si].leds.splice(li, 1); renderStep(); }
+  function setPack(ri, obj, k, v) { var rm = cfg.rooms[ri]; if (!rm) return; rm.pack = rm.pack || {}; var o = rm.pack[obj] = rm.pack[obj] || {}; if (/^(x|y|w|h|sill|inset_mm)$/.test(k)) o[k] = v === '' ? null : Math.max(0, num(v, 0)); else o[k] = v || null; renderStep(); }
+  function setCost(k, v) { cfg.cost = cfg.cost || { overrides: {}, extras: [] }; if (k === 'extras') return; cfg.cost[k] = v === '' ? null : num(v, null); refreshCostPanel(); }
+  function setCostOverride(itemId, v) { cfg.cost.overrides = cfg.cost.overrides || {}; if (v === '' || v == null) delete cfg.cost.overrides[itemId]; else cfg.cost.overrides[itemId] = num(v, null); refreshCostPanel(); }
+  function addExtra() { (cfg.cost.extras = cfg.cost.extras || []).push({ label: 'Matt-black frames / LED channel', cost: 0, sell: null }); refreshCostPanel(); }
+  function setExtra(i, k, v) { var x = (cfg.cost.extras || [])[i]; if (!x) return; x[k] = k === 'label' ? v : (v === '' ? null : num(v, null)); refreshCostPanel(); }
+  function removeExtra(i) { cfg.cost.extras.splice(i, 1); refreshCostPanel(); }
+  function setWqMode(v) { cfg.wqMode = v === 'single' ? 'single' : 'itemised'; refreshWqPanel(); }
+  function setPackMeta(k, v) { cfg.pack = cfg.pack || { scheme: {} }; if (k.indexOf('scheme.') === 0) { cfg.pack.scheme = cfg.pack.scheme || {}; cfg.pack.scheme[k.slice(7)] = v; } else cfg.pack[k] = v; }
 
   // ── step 5 · photos (v0.3.0 — room photos → fabric + LED simulation · lab render pack · returned renders) ──
   var LED_PRESETS = [
@@ -619,8 +662,10 @@
       var rcin = p.rooms[cfg.rooms.indexOf(cin)];
       h += '<div class="panel" style="margin-bottom:18px"><div class="ptt">Cinema Takeoff cross-check <span class="opt-tag">· the drawn cinema model vs this set-out</span></div><div class="hint" style="margin:0">Cinema Takeoff: ' + fmt(ctx.cinemaMaterials.fabric_total_track_m, 1) + ' m track · ' + fmt(ctx.cinemaMaterials.fabric_total_area_m2, 1) + ' m² fabric (' + fmt(ctx.cinemaMaterials.fabric_total_area_waste_m2, 1) + ' m² with waste). This app: ' + fmt(rcin.totals.track_m, 1) + ' m · ' + fmt(rcin.totals.net_m2, 1) + ' m². The Takeoff is the drawn truth for the cinema room; a gap usually means pillasters, bulkheads or no-fabric zones this box model does not know about.</div></div>';
     }
+    if (!CLIENT) h += '<div class="panel" style="margin-bottom:18px" id="costPanel">' + costPanelHtml() + '</div>';
     if (!CLIENT) h += '<div class="panel" style="margin-bottom:18px" id="wqPanel">' + wqPanelHtml() + '</div>';
-    h += '<div class="actions">' + (!CLIENT ? '<button class="btn ghost" onclick="FabricApp.saveConfig()">Save design</button><button class="btn ghost" onclick="FabricApp.savePdf(true)">Cut list &amp; BOM (internal)</button>' : '') + '<button class="btn primary" onclick="FabricApp.savePdf()">Download Stretched Fabric Proposal</button></div>';
+    if (!CLIENT) h += '<div class="panel" style="margin-bottom:18px" id="packPanel">' + packPanelHtml() + '</div>';
+    h += '<div class="actions">' + (!CLIENT ? '<button class="btn ghost" onclick="FabricApp.saveConfig()">Save design</button><button class="btn ghost" onclick="FabricApp.savePdf(true)">Cut list &amp; BOM (internal)</button><button class="btn ghost" onclick="FabricApp.savePack()">Design &amp; dimension pack (A3)</button>' : '') + '<button class="btn primary" onclick="FabricApp.savePdf()">Download Stretched Fabric Proposal</button></div>';
     h += '<div class="disc">' + (CFG.termsLines || []).map(esc).join(' ') + '</div></div>';
     if (!CLIENT) setTimeout(function () { loadSavedList(); wqRefresh(); }, 50);
     return h;
@@ -630,19 +675,72 @@
   // ── WeQuote (Garden pattern) ─────────────────────────────────────────────
   function wqModel() {
     var p = calcAll();
-    return { ref: ctx.projectRef || cfg.client.project || '', name: cfg.client.project || '', rooms: cfg.rooms.map(function (rm, i) { return { name: rm.name, code: rm.code || rm.name, floor_code: rm.floor_code || 'GF', fabric: roomFabric(rm), track: roomTrack(rm), infill: roomInfill(rm), colour: roomColour(rm), calc: p.rooms[i] }; }) };
+    return { ref: ctx.projectRef || cfg.client.project || '', name: cfg.client.project || '', rooms: cfg.rooms.map(function (rm, i) { return { name: rm.name, code: rm.code || rm.name, floor_code: rm.floor_code || 'GF', fabric: roomFabric(rm), track: roomTrack(rm), split: E.item('st-split') || null, infill: roomInfill(rm), colour: roomColour(rm), calc: p.rooms[i] }; }) };
   }
+  // ── v0.4.0 costing (internal) ────────────────────────────────────────────
+  function costing() { var K = global.SonorFabricCost; return K ? K.build(wqModel(), cfg.cost || {}) : null; }
+  function costPanelHtml() {
+    var K = global.SonorFabricCost; if (!K) return '<div class="ptt">Costing</div><div class="hint" style="margin:0">fabric-cost.js not loaded.</div>';
+    var c = costing(), T = c.totals, R = c.rates, money = K.money, d = K.defaults;
+    var h = '<div class="ptt">Costing <span class="opt-tag">· internal · Library trade prices × calc quantities · never on the client PDF</span></div>';
+    h += '<div class="ovr"><label><span>Labour cost £/h</span><input type="number" step="0.5" value="' + (cfg.cost.labourCostRate == null ? '' : cfg.cost.labourCostRate) + '" placeholder="' + d.labourCostRate + '" onchange="FabricApp.setCost(\'labourCostRate\',this.value)"></label><label><span>Labour sell £/h</span><input type="number" step="0.5" value="' + (cfg.cost.labourSellRate == null ? '' : cfg.cost.labourSellRate) + '" placeholder="' + d.labourSellRate + '" onchange="FabricApp.setCost(\'labourSellRate\',this.value)"></label><label><span>Materials margin %</span><input type="number" step="1" value="' + (cfg.cost.marginPct == null ? '' : cfg.cost.marginPct) + '" placeholder="' + d.marginPct + '" onchange="FabricApp.setCost(\'marginPct\',this.value)"></label><div class="hint" style="margin:0;align-self:center">Defaults from WeQuote #2805 (labour ~£' + d.labourCostRate + ' / £' + d.labourSellRate + ' per hour, margin ' + d.marginPct + ' %). Sell = cost ÷ (1 − margin), the way WeQuote shows it.</div></div>';
+    h += '<div style="overflow-x:auto"><table class="pln"><thead><tr><th style="text-align:left">Room · line</th><th>Qty</th><th>Rate</th><th>Cost</th><th>Sell</th><th style="text-align:left">Basis</th></tr></thead><tbody>';
+    c.rooms.forEach(function (r) {
+      r.lines.forEach(function (ln, i) {
+        var rateCell = ln.kind === 'labour' ? money(ln.rate) + ' / ' + money(ln.rate_sell) : (ln.kind === 'extra' ? '—' : '<input type="number" step="0.01" style="width:84px" value="' + (cfg.cost.overrides && cfg.cost.overrides[ln.item_id] != null ? cfg.cost.overrides[ln.item_id] : '') + '" placeholder="' + (ln.rate != null && ln.rate_from === 'library' ? ln.rate : 'TBC') + '" onchange="FabricApp.setCostOverride(\'' + esc(ln.item_id) + '\',this.value)"> /' + (ln.unit === 'm2' ? 'm²' : ln.unit));
+        h += '<tr' + (ln.tbc ? ' class="warn"' : '') + '><td style="text-align:left">' + (i ? '' : '<b>' + esc(r.name) + '</b><br>') + esc(ln.label) + (ln.tbc ? ' <span class="warn">· no Library price — enter a rate</span>' : '') + '</td><td>' + fmt(ln.qty, 2) + ' ' + (ln.unit === 'm2' ? 'm²' : ln.unit) + '</td><td>' + rateCell + '</td><td>' + money(ln.cost) + '</td><td>' + money(ln.sell) + '</td><td style="text-align:left;color:var(--muted)">' + esc(ln.note) + '</td></tr>';
+      });
+      h += '<tr><td style="text-align:left"><b>' + esc(r.name) + ' · total</b></td><td>' + fmt(r.net_m2, 2) + ' m² net</td><td>' + (r.sell_per_m2 ? money(r.sell_per_m2) + ' /m² all-in' : '') + '</td><td><b>' + money(r.cost) + '</b></td><td><b>' + money(r.sell) + '</b></td><td style="text-align:left;color:var(--muted)">cost ' + (r.cost_per_m2 ? money(r.cost_per_m2) + ' /m²' : '') + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<div class="chips">' + (cfg.cost.extras || []).map(function (x, i) { return '<span class="chip co"><input value="' + esc(x.label) + '" style="width:220px" onchange="FabricApp.setExtra(' + i + ',\'label\',this.value)"> cost £<input type="number" step="0.01" value="' + (x.cost == null ? '' : x.cost) + '" onchange="FabricApp.setExtra(' + i + ',\'cost\',this.value)"> sell £<input type="number" step="0.01" value="' + (x.sell == null ? '' : x.sell) + '" placeholder="margin" onchange="FabricApp.setExtra(' + i + ',\'sell\',this.value)"><button class="x" onclick="FabricApp.removeExtra(' + i + ')">×</button></span>'; }).join('') + '<button class="ghost sm" onclick="FabricApp.addExtra()">+ Extra (frames · LED · trims)</button></div>';
+    h += '<div class="strip" style="margin:12px 0 0"><div class="cellx"><div class="cl">Materials</div><div class="cv">' + money(T.materials_sell) + '</div><div class="cn">cost ' + money(T.materials_cost) + '</div></div><div class="cellx"><div class="cl">Labour</div><div class="cv">' + money(T.labour_sell) + '</div><div class="cn">' + fmt(T.labour_h, 1) + ' h · cost ' + money(T.labour_cost) + '</div></div><div class="cellx"><div class="cl">Extras</div><div class="cv">' + money(T.extras_sell) + '</div><div class="cn">cost ' + money(T.extras_cost) + '</div></div><div class="cellx"><div class="cl">Proposal sell</div><div class="cv">' + money(T.sell) + '</div><div class="cn">cost ' + money(T.cost) + ' · margin ' + (T.margin_pct == null ? '—' : fmt(T.margin_pct, 1) + ' %') + (T.tbc.length ? ' · <span class="warn">' + T.tbc.length + ' line' + (T.tbc.length > 1 ? 's' : '') + ' TBC</span>' : '') + '</div></div></div>';
+    return h;
+  }
+  function refreshCostPanel() { var p = $('costPanel'); if (p) p.innerHTML = costPanelHtml(); refreshWqPanel(); }
+  // ── v0.4.0 design & dimension pack (A3) ──────────────────────────────────
+  function packPanelHtml() {
+    var pk = cfg.pack || {}, sc = pk.scheme || {};
+    var h = '<div class="ptt">Design &amp; dimension pack <span class="opt-tag">· A3 landscape · plan · elevations · RCP · lighting · details · quantities · register</span></div>';
+    h += '<div class="ovr"><label><span>Paper</span><select onchange="FabricApp.setPackMeta(\'paper\',this.value)">' + ['A3', 'A4'].map(function (x) { return '<option' + ((pk.paper || 'A3') === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></label><label><span>Orientation</span><select onchange="FabricApp.setPackMeta(\'orient\',this.value)">' + ['landscape', 'portrait'].map(function (x) { return '<option value="' + x + '"' + ((pk.orient || 'landscape') === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></label><label><span>Revision</span><input value="' + esc(pk.rev || 'R1') + '" style="min-width:80px" onchange="FabricApp.setPackMeta(\'rev\',this.value)"></label><label><span>Option</span><input value="' + esc(pk.option || '') + '" placeholder="Option 2" onchange="FabricApp.setPackMeta(\'option\',this.value)"></label><label><span>Scheme title</span><input value="' + esc(sc.title || '') + '" placeholder="Fabric throughout. Light where it matters." style="min-width:300px" onchange="FabricApp.setPackMeta(\'scheme.title\',this.value)"></label><label><span>Subtitle</span><input value="' + esc(sc.subtitle || '') + '" placeholder="Complete-room fabric scheme" onchange="FabricApp.setPackMeta(\'scheme.subtitle\',this.value)"></label></div>';
+    h += '<div class="ovr"><label><span>Scheme blurb</span><input value="' + esc(sc.blurb || '') + '" style="min-width:520px" onchange="FabricApp.setPackMeta(\'scheme.blurb\',this.value)"></label><label><span>Fabric</span><input value="' + esc(sc.fabric || '') + '" placeholder="Lines FR #10 / physical sample governs" onchange="FabricApp.setPackMeta(\'scheme.fabric\',this.value)"></label><label><span>Borders</span><input value="' + esc(sc.borders || '') + '" placeholder="Matt black / all four sides" onchange="FabricApp.setPackMeta(\'scheme.borders\',this.value)"></label><label><span>Light</span><input value="' + esc(sc.light || '') + '" placeholder="Warm 2700 K / separate dimming groups" onchange="FabricApp.setPackMeta(\'scheme.light\',this.value)"></label></div>';
+    h += '<div class="hint" style="margin:0">Every dimension on the sheets carries its provenance tag (S supplied · P proposal · A assumed · D derived) from the Layout step — openings with no set-out are placed automatically and tagged A. The pack is design development, not for construction, and says so on every sheet.</div>';
+    return h;
+  }
+  function packModel() {
+    var p = calcAll(), pk = cfg.pack || {}, sc = pk.scheme || {};
+    var projectNo = (String(ctx.projectRef || cfg.client.project || '').match(/^(\d{3,5})\b/) || [])[1] || '';
+    var rooms = cfg.rooms.map(function (rm, i) { var f = roomFabric(rm), cw = f ? E.colourways(f) : [], col = roomColour(rm), cc = cw.find(function (c) { return c.name === col; }); return { name: rm.name, w_mm: rm.w_mm, d_mm: rm.d_mm, h_mm: rm.h_mm, src: rm.src || 'S', pack: rm.pack || {}, surfaces: rm.surfaces, calc: p.rooms[i], fabric: f, colour: col, colourHex: (cc && cc.hex) || null, swatch: (cc && cc.img) || (f && f.swatch_img) || null, track: roomTrack(rm), infill: roomInfill(rm), opts: roomOpts(rm) }; });
+    var renders = rendersMine().filter(function (r) { return r.pdf !== false; }).sort(function (a, b) { return (b.hero ? 1 : 0) - (a.hero ? 1 : 0); }).map(function (r) { return { url: r.url, caption: r.caption || '', hero: !!r.hero, note: r.note || '' }; });
+    var r0 = rooms[0];
+    return { projectNo: projectNo, title: (r0 ? r0.name : cfg.client.project) || 'Room', client: cfg.client.name, option: pk.option || '', rev: pk.rev || 'R1', dateText: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      scheme: { title: sc.title || '', blurb: sc.blurb || '', subtitle: sc.subtitle || '', fabric: sc.fabric || (r0 && r0.fabric ? r0.fabric.name + (r0.colour ? ' ' + r0.colour : '') + ' / physical sample governs' : ''), borders: sc.borders || '', light: sc.light || '', coverBlurb: sc.coverBlurb || '' },
+      paper: pk.paper || 'A3', orient: pk.orient || 'landscape',
+      rooms: rooms, renders: renders, swatchUrl: r0 ? r0.swatch : null, totals: p.totals, compare: pk.compare || null, quoteRef: cfg._lastRef, configLabel: cfg._savedLabel || '', base: '../data/', termsLines: CFG.termsLines || [] };
+  }
+  async function savePack() {
+    if (!cfg.rooms.length) { toast('Add at least one room first'); return; }
+    var K = global.SonorFabricPack; if (!K) { toast('fabric-pack.js not loaded'); return; }
+    try {
+      var m = packModel(), bytes = await K.generate(m);
+      if (m.returnBytes) return bytes;
+      var blob = new Blob([bytes], { type: 'application/pdf' }), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (m.projectNo ? m.projectNo + '-' : '') + 'design-dimension-pack-' + (m.rev || 'R1') + '-' + (m.paper || 'A3') + (m.orient === 'portrait' ? '-portrait' : '') + '.pdf'; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+      toast('Pack downloaded');
+    } catch (e) { console.warn('[fabric] pack failed', e); toast('Pack failed — see console'); }
+  }
+
   function wqPanelHtml() {
     var W = global.SonorFabricWq; if (!W) return '<div class="ptt">WeQuote</div><div class="hint" style="margin:0">WeQuote module not loaded.</div>';
-    var plan = W.buildPlan(wqModel(), ctx.wqQuote || null), t = plan.totals;
-    var h = '<div class="ptt">WeQuote <span class="opt-tag">· one area per room · Stretched Fabric Walls lines</span></div>';
+    var single = cfg.wqMode === 'single', plan = W.buildPlan(wqModel(), ctx.wqQuote || null, single ? { mode: 'single', costing: costing() } : null), t = plan.totals;
+    var h = '<div class="ptt">WeQuote <span class="opt-tag">· one area per room · ' + (single ? 'ONE priced line per room from the costing' : 'Stretched Fabric Walls lines') + '</span></div>';
+    h += '<div class="chips" style="margin:0 0 10px"><span class="chip"><label><input type="radio" name="wqMode" ' + (single ? '' : 'checked') + ' onchange="FabricApp.setWqMode(\'itemised\')"> Itemised — fabric · track · infill · cut-outs (prices resolve in WeQuote)</label></span><span class="chip"><label><input type="radio" name="wqMode" ' + (single ? 'checked' : '') + ' onchange="FabricApp.setWqMode(\'single\')"> Single line — priced here, pushed with cost &amp; sell</label></span></div>';
     h += '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px"><span class="hint" style="margin:0">Paired quote:</span>' + (ctx.wqQuote ? wqPill({ href: wqQuoteUrl(ctx.wqQuote), title: 'Open WeQuote quote #' + (ctx.wqQuote.no || ctx.wqQuote.id) }) + ' <span class="spec-chip">#' + esc(ctx.wqQuote.no || ctx.wqQuote.id) + (ctx.wqQuote.description ? ' — ' + esc(ctx.wqQuote.description) : '') + (ctx.wqQuote.stage ? ' · ' + esc(ctx.wqQuote.stage) : '') + '</span>' : '<span class="hint warn" style="margin:0">none</span>') +
       '<select id="wqPick" style="min-width:220px"><option value="">— pick a quote on this project —</option>' + (ctx.wqLinks || []).map(function (l) { return '<option value="' + esc(l.quote_id) + '">#' + esc(l.quote_no || l.quote_id) + (l.wq_description ? ' — ' + esc(l.wq_description) : '') + ' · ' + esc(l.slot) + (l.wq_stage ? ' · ' + esc(l.wq_stage) : '') + '</option>'; }).join('') + '</select>' +
       '<input id="wqId" placeholder="or WeQuote quote id" style="width:150px"><button class="ghost sm" onclick="FabricApp.wqPair()">Pair</button><button class="ghost sm" onclick="FabricApp.wqRefresh()">↻</button></div>';
-    h += '<div style="overflow-x:auto"><table class="pln"><thead><tr><th style="text-align:left">Area</th><th style="text-align:left">Line</th><th>Qty</th><th style="text-align:left">WeQuote product</th></tr></thead><tbody>';
-    plan.floors.forEach(function (fl) { fl.rooms.forEach(function (r) { r.lines.forEach(function (ln, i) { h += '<tr><td style="text-align:left">' + (i ? '' : '<b>' + esc(fl.code + ' · ' + r.name) + '</b>') + '</td><td style="text-align:left">' + esc(ln.basis || ln.name) + '</td><td>' + ln.qty + ' ' + (ln.unit === 'm2' ? 'm²' : ln.unit) + '</td><td style="text-align:left;color:var(--muted)">' + wqPill({ title: 'WeQuote product #' + ln.product_id }) + ' ' + (ln.kind === 'estimate' ? '≈ ' : '') + esc(ln.name) + ' <span style="font-size:9px">#' + ln.product_id + '</span></td></tr>'; }); }); });
+    h += '<div style="overflow-x:auto"><table class="pln"><thead><tr><th style="text-align:left">Area</th><th style="text-align:left">Line</th><th>Qty</th>' + (single ? '<th>Cost</th><th>Sell</th>' : '') + '<th style="text-align:left">WeQuote product</th></tr></thead><tbody>';
+    plan.floors.forEach(function (fl) { fl.rooms.forEach(function (r) { r.lines.forEach(function (ln, i) { h += '<tr><td style="text-align:left">' + (i ? '' : '<b>' + esc(fl.code + ' · ' + r.name) + '</b>') + '</td><td style="text-align:left">' + esc(ln.basis || ln.name) + '</td><td>' + ln.qty + ' ' + (ln.unit === 'm2' ? 'm²' : ln.unit) + '</td>' + (single ? '<td>£' + fmt(ln.cost, 2) + (ln.unit === 'm2' ? '/m²' : '') + '<div class="cn">£' + fmt(ln.total_cost, 2) + '</div></td><td>£' + fmt(ln.sell, 2) + (ln.unit === 'm2' ? '/m²' : '') + '<div class="cn">£' + fmt(ln.total_sell, 2) + '</div></td>' : '') + '<td style="text-align:left;color:var(--muted)">' + wqPill({ title: 'WeQuote product #' + ln.product_id }) + ' ' + (ln.kind === 'estimate' ? '≈ ' : '') + esc(ln.name) + ' <span style="font-size:9px">#' + ln.product_id + '</span></td></tr>'; }); }); });
     (plan.unmapped || []).forEach(function (u) { h += '<tr><td></td><td style="text-align:left" class="warn">' + esc(u.label) + '</td><td class="warn">' + u.qty + '</td><td style="text-align:left" class="warn">' + wqPill({ off: true, title: 'Not linked to a WeQuote product' }) + ' no WeQuote product — link it in Library › WeQuote (or add a WQ-PRODUCTS-NEEDED row)</td></tr>'; });
-    h += '</tbody></table></div><div class="hint" style="margin-top:8px">' + t.wqLines + ' lines · ' + t.mapped + ' mapped · ' + t.fallback + ' on the generic fabric line · ' + t.unmapped + ' unmapped. Delta push — re-pushing never duplicates; the API cannot delete, so corrections happen in WeQuote. Prices resolve in WeQuote.</div>';
+    h += '</tbody></table></div><div class="hint" style="margin-top:8px">' + t.wqLines + ' lines · ' + t.mapped + ' mapped · ' + t.fallback + ' on the generic fabric line · ' + t.unmapped + ' unmapped. Delta push — re-pushing never duplicates; the API cannot delete, so corrections happen in WeQuote. ' + (single ? 'Single line: the all-in rate is sent as unit cost / sell on the fabric line (qty = finished m²), so the WeQuote line total = the costing total ' + '£' + fmt(t.sell, 2) + '. Switching a quote from itemised to single does not remove the itemised lines — do that in WeQuote.' : 'Prices resolve in WeQuote.') + '</div>';
     h += '<div class="actions" style="margin-top:12px"><button class="btn ghost" style="padding:10px 18px" onclick="FabricApp.wqPush(true)"' + (ctx.wqQuote ? '' : ' disabled') + '>Dry run</button><button class="btn primary" style="padding:10px 18px" onclick="FabricApp.wqPush(false)"' + (ctx.wqQuote ? '' : ' disabled') + '>🧾 Push to WeQuote</button><span class="hint" id="wqStatus" style="margin:0;align-self:center">' + esc(ctx.wqStatus || '') + '</span></div>';
     h += '<div class="wq-bar"><i id="wqBar"></i></div><pre id="wqLog" class="wq-log"></pre>';
     return h;
@@ -667,7 +765,7 @@
   }
   async function wqPush(dry) {
     var db = dbc(), W = global.SonorFabricWq; if (!db || !W || !ctx.wqQuote) return;
-    var plan = W.buildPlan(wqModel(), ctx.wqQuote);
+    var plan = W.buildPlan(wqModel(), ctx.wqQuote, cfg.wqMode === 'single' ? { mode: 'single', costing: costing() } : null);
     var logEl = $('wqLog'), bar = $('wqBar'); if (logEl) { logEl.textContent = ''; logEl.classList.add('on'); }
     ctx.wqStatus = dry ? 'Dry run…' : 'Pushing…'; var st = $('wqStatus'); if (st) st.textContent = ctx.wqStatus;
     var out = await W.push(db, plan, { ref: ctx.projectRef || cfg.client.project, dry: !!dry, onLog: function (lines) { if (logEl) { lines.forEach(function (l) { logEl.textContent += l + '\n'; }); logEl.scrollTop = logEl.scrollHeight; } }, onProgress: function (pct) { if (bar) bar.style.width = pct + '%'; }, onStatus: function (m) { ctx.wqStatus = m; var s2 = $('wqStatus'); if (s2) s2.textContent = m; } });
@@ -793,8 +891,11 @@
       var res = await db.from('fabric_configs').select('id,label,config,project_id').eq('id', id).single();
       if (res.data && res.data.config) {
         var c = res.data.config;
-        ['rooms', 'defaults', 'client', 'lab'].forEach(function (k) { if (c[k] != null) cfg[k] = c[k]; });
+        ['rooms', 'defaults', 'client', 'lab', 'cost', 'wqMode', 'pack'].forEach(function (k) { if (c[k] != null) cfg[k] = c[k]; });
         cfg.lab = cfg.lab || { consent: false, consentAt: null };
+        cfg.cost = Object.assign({ labourCostRate: null, labourSellRate: null, marginPct: null, overrides: {}, extras: [] }, cfg.cost || {});
+        cfg.pack = Object.assign({ rev: 'R1', option: '', scheme: {}, compare: null }, cfg.pack || {}); cfg.pack.scheme = cfg.pack.scheme || {};
+        if (!cfg.wqMode) cfg.wqMode = 'itemised';
         // v0.3.0 — a design opened by deep link (?config=) carries its project: the row's project_id wins, the config's copy is the fallback
         if (res.data.project_id || c.projectId) { var pidNew = res.data.project_id || c.projectId; if (cfg.projectId !== pidNew) { cfg.projectId = pidNew; await pullContext(); } }
         cfg._savedId = res.data.id; cfg._savedLabel = res.data.label || null;
@@ -839,7 +940,8 @@
       renders: internal ? [] : rendersMine().filter(function (r) { return r.pdf !== false; }).sort(function (a, b) { return (b.hero ? 1 : 0) - (a.hero ? 1 : 0); }).map(function (r) { return { url: r.url, caption: r.caption || '', hero: !!r.hero }; }),
       totals: p.totals, flags: p.totals.flags,
       cinemaMaterials: ctx.cinemaMaterials || null,
-      wq: internal ? (global.SonorFabricWq ? global.SonorFabricWq.buildPlan(wqModel(), ctx.wqQuote || null) : null) : null,
+      wq: internal ? (global.SonorFabricWq ? global.SonorFabricWq.buildPlan(wqModel(), ctx.wqQuote || null, cfg.wqMode === 'single' ? { mode: 'single', costing: costing() } : null) : null) : null,
+      costing: internal ? costing() : null,   // v0.4.0 — internal BOM carries the costing block (never the client proposal)
       termsLines: CFG.termsLines || [],
       dateText: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
     };
@@ -862,6 +964,9 @@
     addOpening: addOpening, setOpening: setOpening, removeOpening: removeOpening, addCutout: addCutout, setCutout: setCutout, removeCutout: removeCutout,
     setClient: setClient, saveConfig: saveConfig, openSaved: openSaved, openFromOverview: openFromOverview, savePdf: savePdf,
     wqRefresh: wqRefresh, wqPair: wqPair, wqPush: wqPush,
+    // v0.4.0 — set-out meta · LED routes · costing · single-line push · design & dimension pack
+    setSurfaceMeta: setSurfaceMeta, addLed: addLed, setLed: setLed, removeLed: removeLed, setPack: setPack, setPackMeta: setPackMeta,
+    setCost: setCost, setCostOverride: setCostOverride, addExtra: addExtra, setExtra: setExtra, removeExtra: removeExtra, setWqMode: setWqMode, costing: costing, packModel: packModel, savePack: savePack,
     // v0.3.0 — photos · simulator · lab
     photoRoomSel: photoRoomSel, photoSel: photoSel, photoFiles: photoFiles, photoRemove: photoRemove,
     simMode: simMode, simWallSurface: simWallSurface, simSet: simSet, simRemove: simRemove, simDim: simDim, simLedPct: simLedPct, simMarkers: simMarkers, simSave: simSave,

@@ -1,4 +1,4 @@
-/* Sonor Stretched Fabric — static config (v0.3.0)
+/* Sonor Stretched Fabric — static config (v0.4.0)
    window.__FABRIC_CONFIG__ — flow rules, surface defaults, calc constants, WeQuote shape, copy.
    Engineering refs only. Project data lives in Supabase (fabric_configs); the catalogue is the
    Library (aesthetic_items → v_aesthetic_catalogue: wall_fabric · stretch_track · stretch_infill).
@@ -6,8 +6,8 @@
 (function () {
   'use strict';
   window.__FABRIC_CONFIG__ = {
-    version: '0.3.1',
-    buildDate: '2026-10-21',
+    version: '0.4.0',
+    buildDate: '2026-10-22',
     cacheKey: 'sonor_fabric_ssot_v1',
     steps: ['Rooms', 'System', 'Fabric', 'Layout', 'Photos', 'Summary'],
     bucket: 'fabric-assets',             // v0.3.0 — room photos + simulations (public bucket, photos/<project>/… sims/<project>/…)
@@ -30,6 +30,9 @@
       labour: { wallM2: 0.9, ceilingM2: 1.3, perPanel: 0.4, perCutout: 0.25, perOpening: 0.5, trackM: 0.08 }
     },
 
+    // ── v0.4.0 internal costing defaults (fabric-cost.js) — Library trade prices × calc quantities; labour from WeQuote #2805 ──
+    cost: { labourCostRate: 31, labourSellRate: 62, marginPct: 43, fabricMinLm: 5, trackLengthMm: 2000, trackMinM: 10 },
+
     orientations: [
       { id: 'drop',     label: 'Vertical drop',  note: 'Roll width runs across the wall — one drop per panel, seams vertical. Any height.' },
       { id: 'railroad', label: 'Railroaded',     note: 'Roll runs along the wall — seamless runs up to the panel limit; needs roll width ≥ height.' }
@@ -43,6 +46,8 @@
       { label: 'Double door',   w: 1800, h: 2100 },
       { label: 'Window',        w: 1200, h: 1200 },
       { label: 'Screen / TV',   w: 2400, h: 1400 },
+      { label: 'Recess',        w: 1700, h: 350 },     // v0.4.0 — existing recess / shelf kept inside the finish
+      { label: 'Glazed door',   w: 1800, h: 2200 },
       { label: 'Custom',        w: 1000, h: 1000 }
     ],
     cutoutKinds: [
@@ -62,7 +67,9 @@
       products: {                       // fixed Sonor products (ids from wq_products)
         cutout:    3457579,             // Stretch Fabric Device Cutout (each)
         detailing: 3457583,             // Stretch Fabric Additional Detailing Factor (each)
-        fabricGeneric: 3457578          // Cineca Stretch Fabric — generic when the fabric has no product
+        fabricGeneric: 3457578,         // Cineca Stretch Fabric — generic when the fabric has no product
+        singleLine: null                // v0.4.0 — a dedicated "Stretched fabric — supply & install per proposal" product (each) once WeQuote has one
+                                        // (WQ-PRODUCTS-NEEDED #30). null = single-line mode prices the room's own fabric line per m² instead.
       },
       categoryId: 47243,                // "Stretched Fabric Walls" · Construction, Treatment & Decor
       infillCategoryId: 47244           // "Acoustic Treatment"
@@ -76,6 +83,7 @@
       fabric: 'Fabrics are chosen from the Sonor library — luxury velvets and FR weaves for feature walls, acoustically transparent cloths where loudspeakers sit behind the finish. Physical samples are approved before any order is placed.',
       layout: 'Each surface is divided into panels at the fabric width, with split tracks at every seam. The elevations below show exactly where seams, openings and cut-outs fall.',
       photos: 'Photographs of the room as it is today, with the chosen fabric and lighting laid over the walls — the panel seams fall exactly where the set-out puts them, and the room keeps its own light.',
+      pack: 'A coordinated design-development set drawn from this design: plan, elevations, ceiling and lighting set-out, details, quantities and a dimension register with provenance tags.',
       renders: 'Visualisations of the finished room, produced from the photographs and the design — the fabric, the seams and the light as they will be.',
       schedule: 'Quantities carried on the quotation: fabric by the square metre per surface, track by the metre, infill by the square metre, and a cut-out for every device that passes through the finish.'
     },
