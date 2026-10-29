@@ -48,6 +48,7 @@
       { label: 'Screen / TV',   w: 2400, h: 1400 },
       { label: 'Recess',        w: 1700, h: 350 },     // v0.4.0 — existing recess / shelf kept inside the finish
       { label: 'Glazed door',   w: 1800, h: 2200 },
+      { label: 'Pier face',     w: 800,  h: 2200 },     // v0.4.0 — a pier / pillar standing in front of a fabric wall: its footprint is an opening in the wall, its face a surface of its own
       { label: 'Custom',        w: 1000, h: 1000 }
     ],
     cutoutKinds: [

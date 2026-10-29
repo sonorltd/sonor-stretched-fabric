@@ -80,14 +80,14 @@
       }
       if (SINGLE) {
         // one priced line per room — the costing's all-in £/m² on the room's fabric product (qty = finished m²)
-        var cr = (opts.costing.rooms || []).find(function (x) { return x.name === rm.name; });
-        if (cr && cr.net_m2 > 0 && cr.sell > 0) {
+        // v0.4.1 — one priced line per costing GROUP (core · optional side walls) so WeQuote can carry the sides as an optional line
+        (opts.costing.rooms || []).filter(function (x) { return (x.room || x.name) === rm.name && x.net_m2 > 0 && x.sell > 0; }).forEach(function (cr) {
           var sl = (W.products || {}).singleLine, one = sl ? true : false;
           var qty = one ? 1 : Math.ceil(cr.net_m2 * 100) / 100, unit = one ? 'each' : 'm2';
           var sell = one ? cr.sell : Math.round(cr.sell / qty * 100) / 100, cst = one ? cr.cost : Math.round(cr.cost / qty * 100) / 100;
-          var ln1 = line('fabric', one ? null : (rm.fabric || null), 'Stretched fabric — supply & install per proposal · ' + (rm.fabric ? rm.fabric.name : 'fabric TBC') + (rm.colour ? ' · ' + rm.colour : '') + ' · ' + cr.net_m2 + ' m² @ ' + (one ? '' : '£' + sell + '/m² ') + 'all-in' + (cr.tbc.length ? ' · TBC: ' + cr.tbc.join(', ') : ''), qty, unit, one ? sl : (W.products || {}).fabricGeneric, W.categoryId);
-          if (ln1) { ln1.sell = sell; ln1.cost = cst; ln1.single = true; ln1.total_sell = cr.sell; ln1.total_cost = cr.cost; totals.sell += cr.sell; totals.cost += cr.cost; lines.push(ln1); }
-        }
+          var ln1 = line('fabric', one ? null : (rm.fabric || null), (cr.optional ? 'OPTIONAL — ' : '') + 'Stretched fabric — supply & install per proposal' + (cr.group === 'core' && opts.costing.split ? ' (front & rear)' : cr.optional ? ' (side walls)' : '') + ' · ' + (rm.fabric ? rm.fabric.name : 'fabric TBC') + (rm.colour ? ' · ' + rm.colour : '') + ' · ' + cr.net_m2 + ' m² @ ' + (one ? '' : '£' + sell + '/m² ') + 'all-in' + (cr.tbc.length ? ' · TBC: ' + cr.tbc.join(', ') : ''), qty, unit, one ? sl : (W.products || {}).fabricGeneric, W.categoryId);
+          if (ln1) { ln1.sell = sell; ln1.cost = cst; ln1.single = true; ln1.optional = !!cr.optional; ln1.kind = ln1.kind + (cr.optional ? '-opt' : ''); ln1.total_sell = cr.sell; ln1.total_cost = cr.cost; totals.sell += cr.sell; totals.cost += cr.cost; lines.push(ln1); }
+        });
       }
       var fc = rm.floor_code || W.floorGroup || 'GF';
       (byFloor[fc] = byFloor[fc] || []).push({ name: rm.name, code: rm.code || rm.name, archRef: rm.colour || '', items: [], lines: lines });

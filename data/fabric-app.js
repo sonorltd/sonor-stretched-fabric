@@ -127,8 +127,8 @@
     var next = $('btnNext');
     if (next) {
       next.disabled = cfg.step === 1 && !cfg.rooms.length;
-      next.textContent = cfg.step === STEPS.length ? 'Download proposal ↓' : 'Continue →';
-      next.onclick = cfg.step === STEPS.length ? savePdf : goNext;
+      next.textContent = cfg.step === STEPS.length ? (CLIENT ? 'Download proposal ↓' : 'Export PDF pack ↓') : 'Continue →';
+      next.onclick = cfg.step === STEPS.length ? (CLIENT ? savePdf : exportOpen) : goNext;
     }
     var body = $('stepBody'); if (!body) return;
     if (ctx.simCtl) { try { ctx.simCtl.destroy(); } catch (e) {} ctx.simCtl = null; }
@@ -399,10 +399,11 @@
   function setLed(ri, si, li, k, v) { var l = cfg.rooms[ri].surfaces[si].leds[li]; if (!l) return; if (k === 'ref') l.ref = Math.max(0, Math.round(num(v, 0))); else if (/_mm$/.test(k)) l[k] = v === '' ? null : Math.max(0, num(v, 0)); else l[k] = v; renderStep(); }
   function removeLed(ri, si, li) { cfg.rooms[ri].surfaces[si].leds.splice(li, 1); renderStep(); }
   function setPack(ri, obj, k, v) { var rm = cfg.rooms[ri]; if (!rm) return; rm.pack = rm.pack || {}; var o = rm.pack[obj] = rm.pack[obj] || {}; if (/^(x|y|w|h|sill|inset_mm)$/.test(k)) o[k] = v === '' ? null : Math.max(0, num(v, 0)); else o[k] = v || null; renderStep(); }
-  function setCost(k, v) { cfg.cost = cfg.cost || { overrides: {}, extras: [] }; if (k === 'extras') return; cfg.cost[k] = v === '' ? null : num(v, null); refreshCostPanel(); }
+  function setCost(k, v) { cfg.cost = cfg.cost || { overrides: {}, extras: [] }; if (k === 'extras') return; if (k === 'splitSides') cfg.cost.splitSides = !!v; else cfg.cost[k] = v === '' ? null : num(v, null); refreshCostPanel(); }
+  function setTrim(k, v) { cfg.cost.trim = cfg.cost.trim || {}; if (k === 'on') cfg.cost.trim.on = !!v; else if (k === 'label') cfg.cost.trim.label = v; else cfg.cost.trim[k] = v === '' ? null : num(v, null); refreshCostPanel(); }
   function setCostOverride(itemId, v) { cfg.cost.overrides = cfg.cost.overrides || {}; if (v === '' || v == null) delete cfg.cost.overrides[itemId]; else cfg.cost.overrides[itemId] = num(v, null); refreshCostPanel(); }
-  function addExtra() { (cfg.cost.extras = cfg.cost.extras || []).push({ label: 'Matt-black frames / LED channel', cost: 0, sell: null }); refreshCostPanel(); }
-  function setExtra(i, k, v) { var x = (cfg.cost.extras || [])[i]; if (!x) return; x[k] = k === 'label' ? v : (v === '' ? null : num(v, null)); refreshCostPanel(); }
+  function addExtra() { (cfg.cost.extras = cfg.cost.extras || []).push({ label: 'Builder — fit trim', cost: 0, sell: null, group: 'core' }); refreshCostPanel(); }
+  function setExtra(i, k, v) { var x = (cfg.cost.extras || [])[i]; if (!x) return; x[k] = (k === 'label' || k === 'group') ? v : (v === '' ? null : num(v, null)); refreshCostPanel(); }
   function removeExtra(i) { cfg.cost.extras.splice(i, 1); refreshCostPanel(); }
   function setWqMode(v) { cfg.wqMode = v === 'single' ? 'single' : 'itemised'; refreshWqPanel(); }
   function setPackMeta(k, v) { cfg.pack = cfg.pack || { scheme: {} }; if (k.indexOf('scheme.') === 0) { cfg.pack.scheme = cfg.pack.scheme || {}; cfg.pack.scheme[k.slice(7)] = v; } else cfg.pack[k] = v; }
@@ -665,7 +666,7 @@
     if (!CLIENT) h += '<div class="panel" style="margin-bottom:18px" id="costPanel">' + costPanelHtml() + '</div>';
     if (!CLIENT) h += '<div class="panel" style="margin-bottom:18px" id="wqPanel">' + wqPanelHtml() + '</div>';
     if (!CLIENT) h += '<div class="panel" style="margin-bottom:18px" id="packPanel">' + packPanelHtml() + '</div>';
-    h += '<div class="actions">' + (!CLIENT ? '<button class="btn ghost" onclick="FabricApp.saveConfig()">Save design</button><button class="btn ghost" onclick="FabricApp.savePdf(true)">Cut list &amp; BOM (internal)</button><button class="btn ghost" onclick="FabricApp.savePack()">Design &amp; dimension pack (A3)</button>' : '') + '<button class="btn primary" onclick="FabricApp.savePdf()">Download Stretched Fabric Proposal</button></div>';
+    h += '<div class="actions">' + (!CLIENT ? '<button class="btn ghost" onclick="FabricApp.saveConfig()">Save design</button>' : '') + (CLIENT ? '<button class="btn primary" onclick="FabricApp.savePdf()">Download Stretched Fabric Proposal</button>' : '<button class="btn primary" onclick="FabricApp.exportOpen()">Export PDF pack…</button>') + '</div>';
     h += '<div class="disc">' + (CFG.termsLines || []).map(esc).join(' ') + '</div></div>';
     if (!CLIENT) setTimeout(function () { loadSavedList(); wqRefresh(); }, 50);
     return h;
@@ -675,7 +676,7 @@
   // ── WeQuote (Garden pattern) ─────────────────────────────────────────────
   function wqModel() {
     var p = calcAll();
-    return { ref: ctx.projectRef || cfg.client.project || '', name: cfg.client.project || '', rooms: cfg.rooms.map(function (rm, i) { return { name: rm.name, code: rm.code || rm.name, floor_code: rm.floor_code || 'GF', fabric: roomFabric(rm), track: roomTrack(rm), split: E.item('st-split') || null, infill: roomInfill(rm), colour: roomColour(rm), calc: p.rooms[i] }; }) };
+    return { ref: ctx.projectRef || cfg.client.project || '', name: cfg.client.project || '', rooms: cfg.rooms.map(function (rm, i) { return { name: rm.name, code: rm.code || rm.name, floor_code: rm.floor_code || 'GF', fabric: roomFabric(rm), track: roomTrack(rm), split: E.item('st-split') || null, infill: roomInfill(rm), colour: roomColour(rm), calc: p.rooms[i], surfaces: rm.surfaces }; }) };
   }
   // ── v0.4.0 costing (internal) ────────────────────────────────────────────
   function costing() { var K = global.SonorFabricCost; return K ? K.build(wqModel(), cfg.cost || {}) : null; }
@@ -684,17 +685,20 @@
     var c = costing(), T = c.totals, R = c.rates, money = K.money, d = K.defaults;
     var h = '<div class="ptt">Costing <span class="opt-tag">· internal · Library trade prices × calc quantities · never on the client PDF</span></div>';
     h += '<div class="ovr"><label><span>Labour cost £/h</span><input type="number" step="0.5" value="' + (cfg.cost.labourCostRate == null ? '' : cfg.cost.labourCostRate) + '" placeholder="' + d.labourCostRate + '" onchange="FabricApp.setCost(\'labourCostRate\',this.value)"></label><label><span>Labour sell £/h</span><input type="number" step="0.5" value="' + (cfg.cost.labourSellRate == null ? '' : cfg.cost.labourSellRate) + '" placeholder="' + d.labourSellRate + '" onchange="FabricApp.setCost(\'labourSellRate\',this.value)"></label><label><span>Materials margin %</span><input type="number" step="1" value="' + (cfg.cost.marginPct == null ? '' : cfg.cost.marginPct) + '" placeholder="' + d.marginPct + '" onchange="FabricApp.setCost(\'marginPct\',this.value)"></label><div class="hint" style="margin:0;align-self:center">Defaults from WeQuote #2805 (labour ~£' + d.labourCostRate + ' / £' + d.labourSellRate + ' per hour, margin ' + d.marginPct + ' %). Sell = cost ÷ (1 − margin), the way WeQuote shows it.</div></div>';
+    var tr = Object.assign({}, K.trimDefaults, cfg.cost.trim || {});
+    h += '<div class="chips meta" style="margin:0 0 10px"><span class="chip"><label><input type="checkbox" ' + (cfg.cost.splitSides ? 'checked' : '') + ' onchange="FabricApp.setCost(\'splitSides\',this.checked)"> Split the side walls out as OPTIONAL (front &amp; rear = core)</label></span>' +
+      '<span class="chip co"><label><input type="checkbox" ' + (tr.on ? 'checked' : '') + ' onchange="FabricApp.setTrim(\'on\',this.checked)"> Trim</label> <input value="' + esc(tr.label) + '" style="width:150px" onchange="FabricApp.setTrim(\'label\',this.value)"> <input type="number" class="q" value="' + tr.w_mm + '" onchange="FabricApp.setTrim(\'w_mm\',this.value)">×<input type="number" class="q" value="' + tr.t_mm + '" onchange="FabricApp.setTrim(\'t_mm\',this.value)"> mm <span class="sub">£/m</span><input type="number" step="0.01" value="' + (tr.rate == null ? '' : tr.rate) + '" placeholder="TBC" onchange="FabricApp.setTrim(\'rate\',this.value)"><span class="sub">finish £/m</span><input type="number" step="0.01" class="q" value="' + (tr.finishRate || '') + '" placeholder="0" onchange="FabricApp.setTrim(\'finishRate\',this.value)"><span class="sub">waste %</span><input type="number" class="q" value="' + tr.wastePct + '" onchange="FabricApp.setTrim(\'wastePct\',this.value)"><span class="sub">length m</span><input type="number" step="0.1" class="q" value="' + tr.lengthM + '" onchange="FabricApp.setTrim(\'lengthM\',this.value)"></span></div>';
     h += '<div style="overflow-x:auto"><table class="pln"><thead><tr><th style="text-align:left">Room · line</th><th>Qty</th><th>Rate</th><th>Cost</th><th>Sell</th><th style="text-align:left">Basis</th></tr></thead><tbody>';
     c.rooms.forEach(function (r) {
       r.lines.forEach(function (ln, i) {
-        var rateCell = ln.kind === 'labour' ? money(ln.rate) + ' / ' + money(ln.rate_sell) : (ln.kind === 'extra' ? '—' : '<input type="number" step="0.01" style="width:84px" value="' + (cfg.cost.overrides && cfg.cost.overrides[ln.item_id] != null ? cfg.cost.overrides[ln.item_id] : '') + '" placeholder="' + (ln.rate != null && ln.rate_from === 'library' ? ln.rate : 'TBC') + '" onchange="FabricApp.setCostOverride(\'' + esc(ln.item_id) + '\',this.value)"> /' + (ln.unit === 'm2' ? 'm²' : ln.unit));
+        var rateCell = ln.kind === 'labour' ? money(ln.rate) + ' / ' + money(ln.rate_sell) : (ln.kind === 'trim' ? (ln.rate != null ? money(ln.rate) + ' /m' : '<span class="warn">rate TBC</span>') : ln.kind === 'extra' ? '—' : '<input type="number" step="0.01" style="width:84px" value="' + (cfg.cost.overrides && cfg.cost.overrides[ln.item_id] != null ? cfg.cost.overrides[ln.item_id] : '') + '" placeholder="' + (ln.rate != null && ln.rate_from === 'library' ? ln.rate : 'TBC') + '" onchange="FabricApp.setCostOverride(\'' + esc(ln.item_id) + '\',this.value)"> /' + (ln.unit === 'm2' ? 'm²' : ln.unit));
         h += '<tr' + (ln.tbc ? ' class="warn"' : '') + '><td style="text-align:left">' + (i ? '' : '<b>' + esc(r.name) + '</b><br>') + esc(ln.label) + (ln.tbc ? ' <span class="warn">· no Library price — enter a rate</span>' : '') + '</td><td>' + fmt(ln.qty, 2) + ' ' + (ln.unit === 'm2' ? 'm²' : ln.unit) + '</td><td>' + rateCell + '</td><td>' + money(ln.cost) + '</td><td>' + money(ln.sell) + '</td><td style="text-align:left;color:var(--muted)">' + esc(ln.note) + '</td></tr>';
       });
-      h += '<tr><td style="text-align:left"><b>' + esc(r.name) + ' · total</b></td><td>' + fmt(r.net_m2, 2) + ' m² net</td><td>' + (r.sell_per_m2 ? money(r.sell_per_m2) + ' /m² all-in' : '') + '</td><td><b>' + money(r.cost) + '</b></td><td><b>' + money(r.sell) + '</b></td><td style="text-align:left;color:var(--muted)">cost ' + (r.cost_per_m2 ? money(r.cost_per_m2) + ' /m²' : '') + '</td></tr>';
+      h += '<tr' + (r.optional ? ' style="color:var(--gold2)"' : '') + '><td style="text-align:left"><b>' + esc(r.name) + ' · total</b>' + (r.frame_m ? '<div class="cn">' + fmt(r.frame_m, 1) + ' m of frame</div>' : '') + '</td><td>' + fmt(r.net_m2, 2) + ' m² net</td><td>' + (r.sell_per_m2 ? money(r.sell_per_m2) + ' /m² all-in' : '') + '</td><td><b>' + money(r.cost) + '</b></td><td><b>' + money(r.sell) + '</b></td><td style="text-align:left;color:var(--muted)">cost ' + (r.cost_per_m2 ? money(r.cost_per_m2) + ' /m²' : '') + '</td></tr>';
     });
     h += '</tbody></table></div>';
-    h += '<div class="chips">' + (cfg.cost.extras || []).map(function (x, i) { return '<span class="chip co"><input value="' + esc(x.label) + '" style="width:220px" onchange="FabricApp.setExtra(' + i + ',\'label\',this.value)"> cost £<input type="number" step="0.01" value="' + (x.cost == null ? '' : x.cost) + '" onchange="FabricApp.setExtra(' + i + ',\'cost\',this.value)"> sell £<input type="number" step="0.01" value="' + (x.sell == null ? '' : x.sell) + '" placeholder="margin" onchange="FabricApp.setExtra(' + i + ',\'sell\',this.value)"><button class="x" onclick="FabricApp.removeExtra(' + i + ')">×</button></span>'; }).join('') + '<button class="ghost sm" onclick="FabricApp.addExtra()">+ Extra (frames · LED · trims)</button></div>';
-    h += '<div class="strip" style="margin:12px 0 0"><div class="cellx"><div class="cl">Materials</div><div class="cv">' + money(T.materials_sell) + '</div><div class="cn">cost ' + money(T.materials_cost) + '</div></div><div class="cellx"><div class="cl">Labour</div><div class="cv">' + money(T.labour_sell) + '</div><div class="cn">' + fmt(T.labour_h, 1) + ' h · cost ' + money(T.labour_cost) + '</div></div><div class="cellx"><div class="cl">Extras</div><div class="cv">' + money(T.extras_sell) + '</div><div class="cn">cost ' + money(T.extras_cost) + '</div></div><div class="cellx"><div class="cl">Proposal sell</div><div class="cv">' + money(T.sell) + '</div><div class="cn">cost ' + money(T.cost) + ' · margin ' + (T.margin_pct == null ? '—' : fmt(T.margin_pct, 1) + ' %') + (T.tbc.length ? ' · <span class="warn">' + T.tbc.length + ' line' + (T.tbc.length > 1 ? 's' : '') + ' TBC</span>' : '') + '</div></div></div>';
+    h += '<div class="chips">' + (cfg.cost.extras || []).map(function (x, i) { return '<span class="chip co"><input value="' + esc(x.label) + '" style="width:200px" onchange="FabricApp.setExtra(' + i + ',\'label\',this.value)"><select onchange="FabricApp.setExtra(' + i + ',\'group\',this.value)"><option value="core"' + ((x.group || 'core') === 'core' ? ' selected' : '') + '>core</option><option value="sides"' + (x.group === 'sides' ? ' selected' : '') + '>sides (optional)</option></select> cost £<input type="number" step="0.01" value="' + (x.cost == null ? '' : x.cost) + '" onchange="FabricApp.setExtra(' + i + ',\'cost\',this.value)"> sell £<input type="number" step="0.01" value="' + (x.sell == null ? '' : x.sell) + '" placeholder="margin" onchange="FabricApp.setExtra(' + i + ',\'sell\',this.value)"><button class="x" onclick="FabricApp.removeExtra(' + i + ')">×</button></span>'; }).join('') + '<button class="ghost sm" onclick="FabricApp.addExtra()">+ Extra (frames · LED · trims)</button></div>';
+    h += '<div class="strip" style="margin:12px 0 0"><div class="cellx"><div class="cl">Materials</div><div class="cv">' + money(T.materials_sell) + '</div><div class="cn">cost ' + money(T.materials_cost) + '</div></div><div class="cellx"><div class="cl">Labour</div><div class="cv">' + money(T.labour_sell) + '</div><div class="cn">' + fmt(T.labour_h, 1) + ' h · cost ' + money(T.labour_cost) + '</div></div><div class="cellx"><div class="cl">Extras</div><div class="cv">' + money(T.extras_sell) + '</div><div class="cn">cost ' + money(T.extras_cost) + '</div></div><div class="cellx"><div class="cl">Trim</div><div class="cv">' + (T.trim_m ? money(T.trim_sell) : '—') + '</div><div class="cn">' + (T.trim_m ? fmt(T.trim_m, 1) + ' m · cost ' + money(T.trim_cost) : 'off') + '</div></div>' + (c.split ? '<div class="cellx"><div class="cl">Core — front &amp; rear</div><div class="cv">' + money(T.core_sell) + '</div><div class="cn">cost ' + money(T.core_cost) + '</div></div><div class="cellx"><div class="cl">Sides — optional</div><div class="cv">' + money(T.sides_sell) + '</div><div class="cn">cost ' + money(T.sides_cost) + '</div></div>' : '') + '<div class="cellx"><div class="cl">Proposal sell' + (c.split ? ' (all)' : '') + '</div><div class="cv">' + money(T.sell) + '</div><div class="cn">cost ' + money(T.cost) + ' · margin ' + (T.margin_pct == null ? '—' : fmt(T.margin_pct, 1) + ' %') + (T.tbc.length ? ' · <span class="warn">' + T.tbc.length + ' line' + (T.tbc.length > 1 ? 's' : '') + ' TBC</span>' : '') + '</div></div></div>';
     return h;
   }
   function refreshCostPanel() { var p = $('costPanel'); if (p) p.innerHTML = costPanelHtml(); refreshWqPanel(); }
@@ -713,7 +717,7 @@
     var rooms = cfg.rooms.map(function (rm, i) { var f = roomFabric(rm), cw = f ? E.colourways(f) : [], col = roomColour(rm), cc = cw.find(function (c) { return c.name === col; }); return { name: rm.name, w_mm: rm.w_mm, d_mm: rm.d_mm, h_mm: rm.h_mm, src: rm.src || 'S', pack: rm.pack || {}, surfaces: rm.surfaces, calc: p.rooms[i], fabric: f, colour: col, colourHex: (cc && cc.hex) || null, swatch: (cc && cc.img) || (f && f.swatch_img) || null, track: roomTrack(rm), infill: roomInfill(rm), opts: roomOpts(rm) }; });
     var renders = rendersMine().filter(function (r) { return r.pdf !== false; }).sort(function (a, b) { return (b.hero ? 1 : 0) - (a.hero ? 1 : 0); }).map(function (r) { return { url: r.url, caption: r.caption || '', hero: !!r.hero, note: r.note || '' }; });
     var r0 = rooms[0];
-    return { projectNo: projectNo, title: (r0 ? r0.name : cfg.client.project) || 'Room', client: cfg.client.name, option: pk.option || '', rev: pk.rev || 'R1', dateText: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+    return { projectNo: projectNo, title: (r0 ? r0.name : cfg.client.project) || 'Room', projectTitle: cfg.client.project || '', client: cfg.client.name, option: pk.option || '', rev: pk.rev || 'R1', dateText: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
       scheme: { title: sc.title || '', blurb: sc.blurb || '', subtitle: sc.subtitle || '', fabric: sc.fabric || (r0 && r0.fabric ? r0.fabric.name + (r0.colour ? ' ' + r0.colour : '') + ' / physical sample governs' : ''), borders: sc.borders || '', light: sc.light || '', coverBlurb: sc.coverBlurb || '' },
       paper: pk.paper || 'A3', orient: pk.orient || 'landscape',
       rooms: rooms, renders: renders, swatchUrl: r0 ? r0.swatch : null, totals: p.totals, compare: pk.compare || null, quoteRef: cfg._lastRef, configLabel: cfg._savedLabel || '', base: '../data/', termsLines: CFG.termsLines || [] };
@@ -918,10 +922,11 @@
   function pdfSafe(s) { var out = String(s); (CFG.pdfSafe || []).forEach(function (r) { out = out.replace(r[0], r[1]); }); return out.replace(/ff/g, 'f f').replace(/FF/g, 'F F').replace(/Ff/g, 'F f'); }
   var SAFE_SKIP = /url|img|image|filename|hex|swatch|src|id$/i;   // v0.3.0: src (sim data URLs) never touched
   function deepSafe(o) { if (o == null) return o; if (typeof o === 'string') return pdfSafe(o); if (Array.isArray(o)) return o.map(deepSafe); if (typeof o === 'object') { Object.keys(o).forEach(function (k) { if (SAFE_SKIP.test(k)) return; o[k] = deepSafe(o[k]); }); } return o; }
-  function pdfModel(internal) {
+  function pdfModel(internal, opts) {
+    opts = opts || {}; var withBom = !!internal || (opts.sections || []).indexOf('bom') >= 0;
     var p = calcAll();
     var m = {
-      internal: !!internal,
+      internal: !!internal, sections: opts.sections || null, part: opts.part || null, pageStart: opts.pageStart || null, pageTotal: opts.pageTotal || null,
       title: cfg.client.project || 'Your Home', client: cfg.client.name, project: cfg.client.project, quoteRef: cfg._lastRef,
       introText: (CFG.sectionBlurbs || {}).intro, blurbs: CFG.sectionBlurbs || {},
       rooms: cfg.rooms.map(function (rm, i) {
@@ -940,14 +945,108 @@
       renders: internal ? [] : rendersMine().filter(function (r) { return r.pdf !== false; }).sort(function (a, b) { return (b.hero ? 1 : 0) - (a.hero ? 1 : 0); }).map(function (r) { return { url: r.url, caption: r.caption || '', hero: !!r.hero }; }),
       totals: p.totals, flags: p.totals.flags,
       cinemaMaterials: ctx.cinemaMaterials || null,
-      wq: internal ? (global.SonorFabricWq ? global.SonorFabricWq.buildPlan(wqModel(), ctx.wqQuote || null, cfg.wqMode === 'single' ? { mode: 'single', costing: costing() } : null) : null) : null,
-      costing: internal ? costing() : null,   // v0.4.0 — internal BOM carries the costing block (never the client proposal)
+      wq: withBom ? (global.SonorFabricWq ? global.SonorFabricWq.buildPlan(wqModel(), ctx.wqQuote || null, cfg.wqMode === 'single' ? { mode: 'single', costing: costing() } : null) : null) : null,
+      costing: withBom ? costing() : null,   // v0.4.0 — internal BOM carries the costing block (never the client proposal)
       termsLines: CFG.termsLines || [],
       dateText: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
     };
     deepSafe(m);
     m.filename = (internal ? 'sonor-stretched-fabric-cutlist-' : 'sonor-stretched-fabric-proposal-') + (m.quoteRef || 'draft') + '.pdf';
     return m;
+  }
+  // ── v0.4.0 EXPORT PDF PACK — one document, tick the sections (Bryn 2026-10-22: "combine all this into one pdf pack though with tick options
+  //    for export, same as other apps" — the Cinema Design section picker pattern: tiers, presets, cover locked, selection saved per browser)
+  var PDF_SECTIONS = [
+    { key: 'cover',      tier: 'Front matter',            label: 'Cover (project hero)',                                   on: true, locked: true, src: 'proposal' },
+    { key: 'intro',      tier: 'Front matter',            label: 'Introduction',                                           on: true, src: 'proposal' },
+    { key: 'renders',    tier: 'Visualisations',          label: 'Visualisations — gallery pictures ticked "PDF" (front and rear full page, then two per page)', on: true, src: 'proposal' },
+    { key: 'rooms',      tier: 'Rooms & surfaces',        label: 'Room pages — spec + elevations',                         on: true, src: 'proposal' },
+    { key: 'sims',       tier: 'Rooms & surfaces',        label: 'In the room — saved photo simulations',                 on: false, src: 'proposal' },
+    { key: 'fabric',     tier: 'Rooms & surfaces',        label: 'Fabric & colour',                                        on: true, src: 'proposal' },
+    { key: 'system',     tier: 'Rooms & surfaces',        label: 'The system',                                             on: true, src: 'proposal' },
+    { key: 'schedule',   tier: 'Rooms & surfaces',        label: 'Schedule (quantities carried on the quotation)',         on: true, src: 'proposal' },
+    { key: 'scheme',     tier: 'Design & dimension sheets', label: 'The selected scheme (two renders + fabric / borders / light)', on: false, src: 'pack' },
+    { key: 'plan',       tier: 'Design & dimension sheets', label: 'GA-01 Room plan & fabric extents',                     on: true, src: 'pack' },
+    { key: 'front',      tier: 'Design & dimension sheets', label: 'GA-02 Front wall elevation',                           on: true, src: 'pack' },
+    { key: 'rear',       tier: 'Design & dimension sheets', label: 'GA-03 Rear wall elevation',                            on: true, src: 'pack' },
+    { key: 'sides',      tier: 'Design & dimension sheets', label: 'GA-04 Side walls',                                     on: true, src: 'pack' },
+    { key: 'rcp',        tier: 'Design & dimension sheets', label: 'GA-05 Reflected ceiling & lighting plan',              on: true, src: 'pack' },
+    { key: 'lighting',   tier: 'Design & dimension sheets', label: 'LT-01 Lighting intent & indicative routes',            on: true, src: 'pack' },
+    { key: 'details',    tier: 'Design & dimension sheets', label: 'DT-01 Material & edge details',                        on: true, src: 'pack' },
+    { key: 'quantities', tier: 'Design & dimension sheets', label: 'QS-01 Quantities — show the working',                  on: true, src: 'pack' },
+    { key: 'register',   tier: 'Design & dimension sheets', label: 'DR-01 Dimension register & survey priorities',         on: true, src: 'pack' },
+    { key: 'closing',    tier: 'Design & dimension sheets', label: 'Further views + source record',                        on: false, src: 'pack' },
+    { key: 'cutlist',    tier: 'Internal (never to the client)', label: 'Cut list — per panel',                            on: false, src: 'proposal' },
+    { key: 'bom',        tier: 'Internal (never to the client)', label: 'BOM, costing & WeQuote plan',                     on: false, src: 'proposal' },
+    { key: 'detail',     tier: 'Closing',                 label: 'The detail — terms + proposal reference',                on: true, src: 'proposal' },
+    { key: 'rearpage',   tier: 'Closing',                 label: 'Rear page — Sonor contact block',                        on: true, src: 'pack' }
+  ];
+  var PDF_PRESETS = {
+    proposal: ['cover', 'intro', 'renders', 'rooms', 'fabric', 'system', 'schedule', 'detail', 'rearpage'],
+    full: PDF_SECTIONS.filter(function (x) { return x.key !== 'cutlist' && x.key !== 'bom' && x.key !== 'sims' && x.key !== 'scheme' && x.key !== 'closing'; }).map(function (x) { return x.key; }),
+    drawings: ['cover', 'plan', 'front', 'rear', 'sides', 'rcp', 'lighting', 'details', 'quantities', 'register', 'rearpage'],
+    internal: PDF_SECTIONS.map(function (x) { return x.key; })
+  };
+  function exportSel() { try { var v = JSON.parse(localStorage.getItem('sonor_fabric_pdf_sections') || 'null'); if (Array.isArray(v) && v.length) return v; } catch (e) {} return PDF_SECTIONS.filter(function (x) { return x.on; }).map(function (x) { return x.key; }); }
+  function exportOpen() {
+    var sel = exportSel(), pk = cfg.pack || {}, tiers = [];
+    PDF_SECTIONS.forEach(function (x) { if (tiers.indexOf(x.tier) < 0) tiers.push(x.tier); });
+    var h = '<div class="xp-back" onclick="FabricApp.exportClose()"></div><div class="xp"><div class="ptt">Export PDF pack <span class="opt-tag">· one document · tick the sections</span></div>';
+    h += '<div class="chips" style="margin:6px 0 10px">' + Object.keys(PDF_PRESETS).map(function (k) { return '<button class="ghost sm" onclick="FabricApp.exportPreset(\'' + k + '\')">' + ({ proposal: 'Client proposal', full: 'Proposal + drawings', drawings: 'Drawings only', internal: 'Everything (internal)' })[k] + '</button>'; }).join('') + '</div>';
+    h += '<div class="xp-body">' + tiers.map(function (t) { return '<div class="xp-tier">' + esc(t) + '</div>' + PDF_SECTIONS.filter(function (x) { return x.tier === t; }).map(function (x) { return '<label class="xp-row' + (x.locked ? ' locked' : '') + '"><input type="checkbox" data-sec="' + x.key + '"' + (sel.indexOf(x.key) >= 0 || x.locked ? ' checked' : '') + (x.locked ? ' disabled' : '') + '> <span>' + esc(x.label) + '</span></label>'; }).join(''); }).join('') + '</div>';
+    h += '<div class="ovr" style="margin-top:12px"><label><span>Drawing sheets</span><select id="xpPaper">' + ['A3', 'A4'].map(function (x) { return '<option' + ((pk.paper || 'A3') === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></label><label><span>Orientation</span><select id="xpOrient">' + ['landscape', 'portrait'].map(function (x) { return '<option value="' + x + '"' + ((pk.orient || 'landscape') === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></label><div class="hint" style="margin:0;align-self:center">Proposal pages are A4 portrait; the drawing sheets take the size chosen here (landscape by default).</div></div>';
+    h += '<div class="actions" style="margin-top:12px"><button class="btn ghost" onclick="FabricApp.exportClose()">Cancel</button><button class="btn primary" onclick="FabricApp.exportRun()">Export PDF</button><span class="hint" id="xpStatus" style="margin:0;align-self:center"></span></div></div>';
+    var el = document.createElement('div'); el.id = 'xpModal'; el.innerHTML = h; document.body.appendChild(el);
+  }
+  function exportClose() { var el = $('xpModal'); if (el) el.remove(); }
+  function exportPreset(k) { var keys = PDF_PRESETS[k] || []; document.querySelectorAll('#xpModal input[data-sec]').forEach(function (i) { if (!i.disabled) i.checked = keys.indexOf(i.getAttribute('data-sec')) >= 0; }); }
+  function exportKeys() { var keys = []; document.querySelectorAll('#xpModal input[data-sec]').forEach(function (i) { if (i.checked) keys.push(i.getAttribute('data-sec')); }); return keys; }
+  async function exportRun() {
+    if (!cfg.rooms.length) { toast('Add at least one room first'); return; }
+    var keys = exportKeys(); try { localStorage.setItem('sonor_fabric_pdf_sections', JSON.stringify(keys)); } catch (e) {}
+    cfg.pack = cfg.pack || {}; cfg.pack.paper = ($('xpPaper') || {}).value || 'A3'; cfg.pack.orient = ($('xpOrient') || {}).value || 'landscape';
+    var st = $('xpStatus'); var say = function (t) { if (st) st.textContent = t; };
+    var PL = global.PDFLib, K = global.SonorFabricPack, hasPack = PDF_SECTIONS.some(function (x) { return x.src === 'pack' && x.key !== 'rearpage' && keys.indexOf(x.key) >= 0; });
+    var propA = PDF_SECTIONS.some(function (x) { return x.src === 'proposal' && ['cutlist', 'bom', 'detail'].indexOf(x.key) < 0 && keys.indexOf(x.key) >= 0; });
+    var propB = ['cutlist', 'bom', 'detail'].some(function (k) { return keys.indexOf(k) >= 0; });
+    if (!cfg._lastRef) cfg._lastRef = makeRef();
+    var impose = false;   // (two-up imposition retired the same evening — "and so its not a4 spreads back to back make it proper pages")
+    try {
+      say('Counting pages…');
+      // pass 1 — page counts; pass 2 — the same documents with continuous numbering
+      var parts = [], total = 0;
+      async function build(pass, startA) {
+        var out = [], start = startA || 1;
+        // on A3 landscape the cover is the pack's own full-sheet cover (hero full bleed) rather than an A4 portrait cover imposed on a half sheet
+        var a3cover = false;   // v0.4.1: the proposal's own cover is drawn on the A3 sheet now (lx.sheet) — "make it proper pages"
+        if (a3cover) { var mc = packModel(); mc.sections = ['cover']; mc.coverMode = 'proposal'; mc.returnBytes = true; mc.pageStart = start; mc.pageTotal = pass === 2 ? total : null; var bc = await K.generate(mc); out.push({ bytes: bc, n: mc.pageCount }); start += mc.pageCount; }
+        var lx = global.SonorPdfLuxury, sheetKey = (cfg.pack.paper || 'A3') + (cfg.pack.orient === 'portrait' ? '' : '-landscape');
+        var onSheet = async function (fn) { if (lx && lx.sheet) lx.sheet(sheetKey === 'A4' ? 'A4' : sheetKey); try { return await fn(); } finally { if (lx && lx.sheet) lx.sheet('A4'); } };
+        if (propA) { var ma = pdfModel(false, { sections: a3cover ? keys.filter(function (k) { return k !== 'cover'; }) : keys, part: 'a', pageStart: start, pageTotal: pass === 2 ? total : null }); ma.returnBytes = true; var ba = await onSheet(function () { return global.FabricPdf.generate(ma); }); out.push({ bytes: ba, n: ma.pageCount }); start += ma.pageCount; }
+        if (hasPack) { var mp = packModel(); mp.sections = keys.filter(function (k) { return k !== 'cover' && k !== 'rearpage'; }); if (!propA && keys.indexOf('cover') >= 0) mp.sections.push('cover'); mp.returnBytes = true; mp.pageStart = start; mp.pageTotal = pass === 2 ? total : null; var bp = await K.generate(mp); out.push({ bytes: bp, n: mp.pageCount }); start += mp.pageCount; }
+        if (propB) { var mb = pdfModel(false, { sections: keys, part: 'b', pageStart: start, pageTotal: pass === 2 ? total : null }); mb.returnBytes = true; var bb = await onSheet(function () { return global.FabricPdf.generate(mb); }); out.push({ bytes: bb, n: mb.pageCount }); start += mb.pageCount; }
+        if (keys.indexOf('rearpage') >= 0) { var mr = packModel(); mr.sections = ['rearpage']; mr.returnBytes = true; mr.pageStart = start; mr.pageTotal = pass === 2 ? total : null; var br = await K.generate(mr); out.push({ bytes: br, n: mr.pageCount }); start += mr.pageCount; }   // the contact block is always the last page
+        return out;
+      }
+      parts = await build(1); total = parts.reduce(function (a, p) { return a + p.n; }, 0);
+      say('Rendering ' + total + ' pages…'); parts = await build(2);
+      var doc = await PL.PDFDocument.create();
+      // v0.4.1 — ONE sheet size (Bryn 2026-10-22: "show the full pdf … as the a3 landscape"): on A3 landscape the A4-portrait proposal pages are
+      // IMPOSED two-up — two A4 portraits are exactly one A3 landscape (2 × 595.28 = 1190.55 pt) — so the whole pack is A3 landscape sheets.
+      // The last odd page sits alone on the left. (The A4 option keeps the proposal pages as they are.) B-572 makes the chrome itself landscape.
+      for (var i = 0; i < parts.length; i++) {
+        var src = await PL.PDFDocument.load(parts[i].bytes);
+        if (impose && parts[i].a4) {
+          var emb = await doc.embedPages(src.getPages());
+          for (var k = 0; k < emb.length; k += 2) { var sheet = doc.addPage([1190.55, 841.89]); sheet.drawRectangle({ x: 0, y: 0, width: 1190.55, height: 841.89, color: PL.rgb(251 / 255, 250 / 255, 247 / 255) }); sheet.drawPage(emb[k], { x: 0, y: 0 }); if (emb[k + 1]) sheet.drawPage(emb[k + 1], { x: 595.28, y: 0 }); }
+        } else { var pages = await doc.copyPages(src, src.getPageIndices()); pages.forEach(function (pg) { doc.addPage(pg); }); }
+      }
+      doc.setTitle('Stretched fabric — ' + (cfg.client.project || '') + ' — ' + (cfg.pack.rev || 'R1')); doc.setAuthor('Sonor Ltd');
+      var bytes = await doc.save();
+      if (global.__FABRIC_EXPORT_CAPTURE__) { global.__FABRIC_EXPORT_CAPTURE__(bytes); exportClose(); return bytes; }
+      var blob = new Blob([bytes], { type: 'application/pdf' }), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sonor-stretched-fabric-' + (cfg._lastRef || 'draft') + '.pdf'; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+      toast('PDF pack exported — ' + total + ' pages'); exportClose();
+    } catch (e) { console.warn('[fabric] export failed', e); say('Export failed — see console'); }
   }
   async function savePdf(internal) {
     if (!cfg.rooms.length) { toast('Add at least one room first'); return; }
@@ -966,7 +1065,8 @@
     wqRefresh: wqRefresh, wqPair: wqPair, wqPush: wqPush,
     // v0.4.0 — set-out meta · LED routes · costing · single-line push · design & dimension pack
     setSurfaceMeta: setSurfaceMeta, addLed: addLed, setLed: setLed, removeLed: removeLed, setPack: setPack, setPackMeta: setPackMeta,
-    setCost: setCost, setCostOverride: setCostOverride, addExtra: addExtra, setExtra: setExtra, removeExtra: removeExtra, setWqMode: setWqMode, costing: costing, packModel: packModel, savePack: savePack,
+    setCost: setCost, setTrim: setTrim, setCostOverride: setCostOverride, addExtra: addExtra, setExtra: setExtra, removeExtra: removeExtra, setWqMode: setWqMode, costing: costing, packModel: packModel, savePack: savePack,
+    exportOpen: exportOpen, exportClose: exportClose, exportPreset: exportPreset, exportRun: exportRun, PDF_SECTIONS: PDF_SECTIONS,
     // v0.3.0 — photos · simulator · lab
     photoRoomSel: photoRoomSel, photoSel: photoSel, photoFiles: photoFiles, photoRemove: photoRemove,
     simMode: simMode, simWallSurface: simWallSurface, simSet: simSet, simRemove: simRemove, simDim: simDim, simLedPct: simLedPct, simMarkers: simMarkers, simSave: simSave,

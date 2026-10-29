@@ -192,7 +192,7 @@
     // openings
     var ops = openingsOf(s, sc);
     ops.forEach(function (o) {
-      var fill = /tv|screen/i.test(o.label) ? DARK : (/recess|custom/i.test(o.label) && o.h < 600 ? OAK : (/door/i.test(o.label) && !/glaz|garden/i.test(o.note + o.label) ? PAPER : GLASS));
+      var fill = /pier|pillar/i.test(o.label) ? PALE : /tv|screen/i.test(o.label) ? DARK : (/recess|custom/i.test(o.label) && o.h < 600 ? OAK : (/door/i.test(o.label) && !/glaz|garden/i.test(o.note + o.label) ? PAPER : GLASS));
       var ox = X(o.x), oy = Y(o.top), ow = o.w * k, oh = o.h * k;
       if (o.frame_mm) { var f2 = o.frame_mm * k; P.rect(ox - f2, oy - f2, ow + 2 * f2, oh + 2 * f2, BLACK); }
       P.rect(ox, oy, ow, oh, fill); P.rectB(ox, oy, ow, oh, INK, 0.6);
@@ -243,30 +243,32 @@
     var imgs = [];
     for (var i = 0; i < (m.renders || []).length; i++) { try { imgs.push({ img: await L.loadImage(doc, m.renders[i].url), r: m.renders[i] }); } catch (e) { console.warn('[fabric-pack] render skipped', e && e.message); } }
     var swatch = null; if (m.swatchUrl) { try { swatch = await L.loadImage(doc, m.swatchUrl); } catch (e) {} }
+    var cedia = null; try { cedia = await L.loadImage(doc, (m.base || '../data/') + 'cedia-member-stacked.png'); } catch (e) {}
     var hero = imgs.find(function (x) { return x.r.hero; }) || imgs[0] || null;
     var rm = m.rooms[0] || null;   // the pack is drawn per ROOM; multi-room projects get one GA set per room
     var sheets = [];
-    var add = function (fn) { sheets.push(fn); };
+    var add = function (key, fn) { if (!Array.isArray(m.sections) || m.sections.indexOf(key) >= 0) sheets.push(fn); };
 
     // 01 cover
     // 01 cover — the Service Contracts cover (sonor-platform §43): hero, dark fade, inset gold frame, eyebrow + title + info row, brand large
-    add(function (page, P, no, total) {
+    add('cover', function (page, P, no, total) {
       var DK = [9, 8, 7];
       P.rect(0, 0, PW, PH, DK);
       if (hero) { P.cover(hero.img, 0, 0, PW, PH); var fTop = PH * 0.52, fH = PH * 0.3; P.fadeDown(0, fTop, PW, fH, DK, 1, 56); P.rect(0, fTop + fH - 1, PW, PH - (fTop + fH) + 1, DK, 1); }
       P.rectB(M * 0.62, M * 0.62, PW - M * 1.24, PH - M * 1.24, GOLD, 0.7, 0.34);
       P.logo(M, M * 0.62 + 22, 30, GOLD); P.tracked('SONOR', M + 37, M * 0.62 + 28, 18, F.b, CREAM, 4.2);
       var ty = PH * 0.70, title = m.title || 'Room', tsize = F.b.widthOfTextAtSize(title, 54) > PW * 0.6 ? 38 : 54;
-      P.line(M, ty - 20, M + 26, ty - 20, GOLD, 1, 0.95); P.tracked('STRETCHED FABRIC  ·  DESIGN & DIMENSION PACK', M + 34, ty - 24, 8.5, F.r, GOLDL, 3.2);
-      P.text(title, M - 2, ty, tsize, F.b, CREAM);
-      P.text((m.option ? m.option + '  —  ' : '') + (m.scheme.subtitle || 'Stretched fabric scheme'), M, ty + 66, 19, F.l, GOLDL);
+      var prop = m.coverMode === 'proposal';   // v0.4.1 — the combined A3 pack's cover: the proposal's words on the sheet-size cover
+      P.line(M, ty - 20, M + 26, ty - 20, GOLD, 1, 0.95); P.tracked(prop ? 'STRETCHED FABRIC PROPOSAL' : 'STRETCHED FABRIC  ·  DESIGN & DIMENSION PACK', M + 34, ty - 24, 8.5, F.r, GOLDL, 3.2);
+      P.text(prop ? (m.projectTitle || title) : title, M - 2, ty, tsize, F.b, CREAM);
+      P.text(prop ? 'Stretched fabric walls & ceilings' + (m.option ? '  ·  ' + m.option : '') : (m.option ? m.option + '  —  ' : '') + (m.scheme.subtitle || 'Stretched fabric scheme'), M, ty + 66, 19, F.l, GOLDL);
       var iy = PH - 76, cw = (PW - M * 2) / 4;
       P.line(M, iy - 16, PW - M, iy - 16, GOLD, 0.5, 0.45);
-      [['PROJECT', (m.projectNo ? m.projectNo + '  ·  ' : '') + (m.client || '')], ['REVISION', (m.rev || 'R1') + '  ·  ' + (m.dateText || '')], ['SHEET', (m.paper || 'A3') + ' ' + (LAND ? 'landscape' : 'portrait') + '  ·  ' + total + ' sheets'], ['STATUS', 'Design development  ·  survey confirmation required']].forEach(function (c, i) { var x = M + i * cw; P.tracked(c[0], x, iy, 7, F.r, INFO, 1.8); P.text(c[1] || '—', x, iy + 13, 12.5, F.b, CREAM); });
+      (prop ? [['PREPARED FOR', m.client || '—'], ['PROJECT', (m.projectNo ? m.projectNo + '  ·  ' : '') + (m.projectTitle || '')], ['REFERENCE', m.quoteRef || '—'], ['ISSUE', (m.rev || 'R1') + '  ·  ' + (m.dateText || '')]] : [['PROJECT', (m.projectNo ? m.projectNo + '  ·  ' : '') + (m.client || '')], ['REVISION', (m.rev || 'R1') + '  ·  ' + (m.dateText || '')], ['SHEET', (m.paper || 'A3') + ' ' + (LAND ? 'landscape' : 'portrait') + '  ·  ' + total + ' sheets'], ['STATUS', 'Design development  ·  survey confirmation required']]).forEach(function (c, i) { var x = M + i * cw; P.tracked(c[0], x, iy, 7, F.r, INFO, 1.8); P.text(c[1] || '—', x, iy + 13, 12.5, F.b, CREAM); });
       P.trackedRight('CEDIA MEMBER', PW - M, PH - 18, 6, F.r, INFO, 1.2);
     });
     // 02 selected scheme
-    add(function (page, P, no, total) {
+    add('scheme', function (page, P, no, total) {
       head(P, F, m, no, m.scheme.title || 'The selected scheme', m.scheme.blurb || '', 'THE SELECTED SCHEME');
       var two = imgs.slice(0, 2), bw = (PW - M * 2 - 24) / 2, bh = Math.min(bw * 0.56, PH * 0.42), iy0 = 170;
       two.forEach(function (x, i) { var bx = M + i * (bw + 24); P.cover(x.img, bx, iy0, bw, bh); P.frame(bx, iy0, bw, bh); P.tracked(pad2(i + 1) + '  ·  ' + safe(x.r.caption || '').toUpperCase().slice(0, 70), bx, iy0 + bh + 14, 6.5, F.r, GOLD, 1.6); P.para(x.r.note || '', bx, iy0 + bh + 28, bw, 8.5, F.r, INK2, 12); });
@@ -281,7 +283,7 @@
     var dwg = 0, drawingNos = [];
 
     // GA-01 room plan
-    add(function (page, P, no, total) {
+    add('plan', function (page, P, no, total) {
       head(P, F, m, no, 'Room plan and fabric extents', 'Overall envelope from the brief. Fabric-covered faces are hatched; opening positions carry their own provenance tag. Survey every opening before procurement.', 'GA-01');
       var LY = lay({ dims: 60, stackH: 0.58 }), box = Object.assign({}, LY.box, { top: LY.box.top + 30, h: LY.box.h - 30 }), k = Math.min(box.w / Wr, box.h / Dr), x0 = box.x + (box.w - Wr * k) / 2, y0 = box.top + (box.h - Dr * k) / 2;
       var X = function (v) { return x0 + v * k; }, Yd = function (v) { return y0 + v * k; };   // plan: front wall at the bottom, rear at the top (reads from the seats)
@@ -335,25 +337,27 @@
     order.forEach(function (side) {
       if (!bySide[side]) return;
       var no_ = 'GA-' + pad2(ga++);
-      add(function (page, P, no, total) {
+      add(side === 'front' ? 'front' : 'rear', function (page, P, no, total) {
         var ss = bySide[side], first = ss[0], sc0 = calcS(first);
         var title = side === 'front' ? 'Front wall - coordinated elevation' : 'Rear wall - ' + (ss.length > 1 ? 'pillars, window and frames' : 'elevation');
         head(P, F, m, no, title, (first.note || '') + (ss.length > 1 ? ' Faces drawn at their set-out; the wall between them is not fabric unless listed.' : ''), no_);
         var LY = lay({ dims: 90, stackH: 0.5 }), box = LY.box, res;
+        var wallL = side === 'front' || side === 'rear' ? Wr : Dr, baseS = ss.find(function (s) { return calcS(s) && calcS(s).len_mm >= wallL * 0.6; }), piersS = ss.filter(function (s) { return s !== baseS; });
         if (ss.length === 1) res = elevation(P, page, F, first, sc0, box, { srcLen: first.src || rsrc, srcH: first.src || rsrc });
         else {
-          // pillars on one wall: draw the wall outline (Wr × Hr) with each face at its offset
+          // pillars on one wall: the wall itself (a full-width fabric surface when one is recorded — its pier footprints are openings — else an outline) with each pier face at its offset
           var L = Wr, H = Hr, k = Math.min(box.w / L, box.h / H), x0 = box.x + (box.w - L * k) / 2, y0 = box.top + (box.h - H * k) / 2;
-          P.rect(x0, y0, L * k, H * k, PALE); P.rectB(x0, y0, L * k, H * k, INK, 0.9);
-          var n = ss.length;
+          if (baseS) { var rb = elevation(P, page, F, baseS, calcS(baseS), { x: x0, top: y0, w: L * k, h: H * k }, { small: true }); }
+          else { P.rect(x0, y0, L * k, H * k, PALE); P.rectB(x0, y0, L * k, H * k, INK, 0.9); }
+          ss = piersS; var n = ss.length;
           ss.forEach(function (s, i) { var sc = calcS(s), fl = sc.len_mm, off = s.offset_mm != null ? s.offset_mm : (n === 2 ? (i === 0 ? 900 : L - 900 - fl) : (L - n * fl) / (n + 1) * (i + 1) + i * fl), base = s.base_mm || 100; var sub = elevation(P, page, F, s, sc, { x: x0 + off * k, top: y0 + (H - base - sc.h_mm) * k, w: fl * k, h: sc.h_mm * k }, { small: true, srcLen: s.src || 'P', srcH: s.src || 'P' }); if (i === 0) { dimH(P, F, x0, x0 + off * k, y0 + H * k + 30, mm(off), 'A', true); } if (i === n - 1) dimH(P, F, x0 + (off + fl) * k, x0 + L * k, y0 + H * k + 30, mm(L - off - fl), 'A', true); dimH(P, F, x0 + off * k, x0 + (off + fl) * k, y0 + H * k + 30, mm(fl), s.src || 'P', true); P.center(s.id.toUpperCase() + ' / ' + safe(s.label).toUpperCase().slice(0, 30), x0 + (off + fl / 2) * k, y0 + (H - base - sc.h_mm) * k - 10, 6, F.b, INK2); if (i === n - 1) { dimV(P, F, x0 + L * k + 16, y0 + (H - base) * k, y0 + H * k, mm(base), 'A', true); dimV(P, F, x0 + L * k + 16, y0 + (H - base - sc.h_mm) * k, y0 + (H - base) * k, mm(sc.h_mm), s.src || 'P', true); dimV(P, F, x0 + L * k + 16, y0, y0 + (H - base - sc.h_mm) * k, mm(H - base - sc.h_mm), 'D', true); } });
           // a window / opening recorded on the room (pack.rearOpening) between the pillars
-          var ro = rm.pack && rm.pack.rearOpening; if (ro && ro.w) { var rx = ro.x != null ? ro.x : (L - ro.w) / 2, sill = ro.sill || 600; P.rect(x0 + rx * k, y0 + (H - sill - ro.h) * k, ro.w * k, ro.h * k, GLASS); P.rectB(x0 + rx * k, y0 + (H - sill - ro.h) * k, ro.w * k, ro.h * k, INK, 0.6); P.center((ro.label || 'WINDOW').toUpperCase() + ' ' + mm(ro.w) + ' x ' + mm(ro.h) + ' [' + (ro.src || 'A') + ']', x0 + (rx + ro.w / 2) * k, y0 + (H - sill - ro.h / 2) * k - 3, 6.5, F.b, INK2); dimH(P, F, x0 + rx * k, x0 + (rx + ro.w) * k, y0 + H * k + 30, mm(ro.w), ro.src || 'A', true); dimV(P, F, x0 + L * k + 30, y0 + (H - sill) * k, y0 + H * k, mm(sill), ro.src || 'A', true); dimV(P, F, x0 + L * k + 30, y0 + (H - sill - ro.h) * k, y0 + (H - sill) * k, mm(ro.h), ro.src || 'A', true); }
+          var ro = rm.pack && rm.pack.rearOpening; if (ro && ro.w && !baseS) { var rx = ro.x != null ? ro.x : (L - ro.w) / 2, sill = ro.sill || 600; P.rect(x0 + rx * k, y0 + (H - sill - ro.h) * k, ro.w * k, ro.h * k, GLASS); P.rectB(x0 + rx * k, y0 + (H - sill - ro.h) * k, ro.w * k, ro.h * k, INK, 0.6); P.center((ro.label || 'WINDOW').toUpperCase() + ' ' + mm(ro.w) + ' x ' + mm(ro.h) + ' [' + (ro.src || 'A') + ']', x0 + (rx + ro.w / 2) * k, y0 + (H - sill - ro.h / 2) * k - 3, 6.5, F.b, INK2); dimH(P, F, x0 + rx * k, x0 + (rx + ro.w) * k, y0 + H * k + 30, mm(ro.w), ro.src || 'A', true); dimV(P, F, x0 + L * k + 30, y0 + (H - sill) * k, y0 + H * k, mm(sill), ro.src || 'A', true); dimV(P, F, x0 + L * k + 30, y0 + (H - sill - ro.h) * k, y0 + (H - sill) * k, mm(ro.h), ro.src || 'A', true); }
           dimH(P, F, x0, x0 + L * k, y0 + H * k + 14, mm(L), rsrc, true); dimV(P, F, x0 - 14, y0, y0 + H * k, mm(H), rsrc);
           res = { k: k, bottom: y0 + H * k + 50 };
         }
         scaleBar(P, F, box.x, Math.min(res.bottom + 24, PH - 80), res.k, '1:' + scaleOf(res.k) + ' on ' + (m.paper || 'A3'));
-        var cx = LY.notes.x, cy = LY.notes.y, cw = LY.notes.w, pre = ss.length > 1 ? function (s) { return s.id.toUpperCase() + ' - '; } : function () { return ''; };
+        ss = bySide[side]; var cx = LY.notes.x, cy = LY.notes.y, cw = LY.notes.w, pre = ss.length > 1 ? function (s) { return s.id.toUpperCase() + ' - '; } : function () { return ''; };
         ss.forEach(function (s) { var sc = calcS(s); var ops = openingsOf(s, sc);
           ops.forEach(function (o) { P.text(pre(s) + safe(o.label) + ' datum', cx, cy, 8, F.b, INK); cy += 12; cy = P.para(mm(o.w) + ' x ' + mm(o.h) + ' [' + o.src + ']; ' + (o.x != null ? 'left edge at ' + mm(o.x) + ' from the ' + (side === 'rear' ? 'right' : 'left') + ' corner [' + o.pos_src + ']; ' : '') + 'sill ' + mm(o.sill) + ', head ' + mm(o.top) + ' from FFL [' + (o.pos_src) + ']. ' + (o.frame_mm ? 'Matt-black frame ' + mm(o.frame_mm) + ' face [A]. ' : '') + (o.note || ''), cx, cy, cw, 7.5, F.r, INK2, 10.5) + 8; });
           if (sc.frame_mm) { P.text(pre(s) + 'Border study', cx, cy, 8, F.b, INK); cy += 12; cy = P.para('Outer frame ' + mm(sc.frame_mm) + ' face [A], solid matt-black, visible outside the fabric. Confirm the frame section and how it meets the ceiling line.', cx, cy, cw, 7.5, F.r, INK2, 10.5) + 8; }
@@ -366,7 +370,7 @@
     });
     if (bySide.right || bySide.left) {
       var noS = 'GA-' + pad2(ga++);
-      add(function (page, P, no, total) {
+      add('sides', function (page, P, no, total) {
         head(P, F, m, no, 'Side walls - ' + (((bySide.right || [])[0] || (bySide.left || [])[0]).note ? 'plain fabric' : 'elevations'), 'Opening sizes and offsets are explicit for coordination. Elevations are viewed face-on; front / rear orientation is identified on each wall.', noS);
         var LY = lay({ dims: 0, stackH: 0.6 }), nS = (bySide.right || []).length + (bySide.left || []).length, eh = Math.max(120, (LY.box.h - 60 * nS) / nS), y = LY.box.top + 10, kmin = 1, cx = LY.notes.x, cy = LY.notes.y, cw = LY.notes.w;
         ['right', 'left'].forEach(function (side) { (bySide[side] || []).forEach(function (s) { var sc = calcS(s); var res = elevation(P, page, F, s, sc, { x: LY.box.x + 30, top: y, w: LY.box.w - 60, h: eh }, { srcLen: s.src || rsrc, srcH: s.src || rsrc }); kmin = Math.min(kmin, res.k); P.text(s.id.toUpperCase() + ' / ' + safe(s.label).toUpperCase() + (side === 'right' ? '  -  FRONT AT LEFT, REAR AT RIGHT (viewed from inside the room)' : '  -  REAR AT LEFT, FRONT AT RIGHT (viewed from inside the room)'), LY.box.x + 30, y - 12, 6.5, F.b, INK2); y = res.bottom + 26;
@@ -379,7 +383,7 @@
     }
     // GA-0n reflected ceiling & lighting plan
     var noC = 'GA-' + pad2(ga++);
-    add(function (page, P, no, total) {
+    add('rcp', function (page, P, no, total) {
       var ceil = (bySide.ceiling || [])[0], csc = ceil ? calcS(ceil) : null, cf = rm.pack && rm.pack.coffer;
       head(P, F, m, no, 'Reflected ceiling and lighting plan', 'Plan reads from below - front wall at bottom, rear at top. ' + (csc ? 'The ceiling is fabric-covered: panels and seams as set out.' : 'The existing ceiling is retained; ') + (cf ? 'coffer dimensions and the shown LED route are ' + (cf.src === 'S' ? 'supplied.' : 'assumed.') : ''), noC);
       var LY = lay({ dims: 40, stackH: 0.58 }), box = Object.assign({}, LY.box, { top: LY.box.top + 24, h: LY.box.h - 24 }), k = Math.min(box.w / Wr, box.h / Dr), x0 = box.x + (box.w - Wr * k) / 2, y0 = box.top + (box.h - Dr * k) / 2;
@@ -399,7 +403,7 @@
       legend(P, F); foot(P, F, m, no, total, noC + '  1:' + scaleOf(k));
     });
     // LT-01 lighting schedule
-    add(function (page, P, no, total) {
+    add('lighting', function (page, P, no, total) {
       head(P, F, m, no, 'Lighting intent and indicative routes', 'All strip dimensions below follow this study geometry, not a measured installation. Route allowances, corner hardware, feeds and drivers are excluded.', 'LT-01');
       var rows = [], tot = 0;
       Object.keys(bySide).forEach(function (side) { if (side === 'ceiling') return; bySide[side].forEach(function (s) { var sc = calcS(s), ops = openingsOf(s, sc); (sc.leds || []).forEach(function (l) { var len = ledLen(s, sc, l, ops); tot += len; rows.push([l.group || '-', safe(s.label) + ' - ' + ledLabel(l.type), l.type === 'perimeter' ? mm(sc.len_mm - 2 * (l.inset_mm || 100)) + ' x ' + mm(sc.h_mm - 2 * (l.inset_mm || 100)) + ' rectangle' : l.type === 'vertical' ? '1 x ' + mm(sc.h_mm - 2 * (l.inset_mm || 100)) + (l.x_mm != null ? ' at X ' + mm(l.x_mm) : '') : l.type === 'halo' && ops[l.ref || 0] ? mm(ops[l.ref || 0].w + 2 * (l.inset_mm || 100)) + ' x ' + mm(ops[l.ref || 0].h + 2 * (l.inset_mm || 100)) + ' rectangle' : l.type === 'inside' && ops[l.ref || 0] ? '1 x ' + mm(ops[l.ref || 0].w) + ' head run' : l.type === 'frame' ? mm(sc.len_mm) + ' x ' + mm(sc.h_mm) + ' four-sided' : '-', fmt(len, 2) + ' m', l.intent || '']); }); }); });
@@ -413,7 +417,7 @@
       legend(P, F); foot(P, F, m, no, total, 'LT-01');
     });
     // DT-01 details
-    add(function (page, P, no, total) {
+    add('details', function (page, P, no, total) {
       head(P, F, m, no, 'Material and edge details', 'Concept sections explain intent only. Manufacturer profiles, substrate fixings, tolerances and installation clearances require installer coordination.', 'DT-01');
       var tr = rm.track, inf = rm.infill, fab = rm.fabric, depth = (tr && tr.depth_mm) || 25;
       var cellW = (PW - M * 2 - 40) / 2, cells = [
@@ -432,8 +436,8 @@
       legend(P, F); foot(P, F, m, no, total, 'DT-01  NTS');
     });
     // QS-01 quantities
-    add(function (page, P, no, total) {
-      head(P, F, m, no, 'Quantities - show the working', 'This is the set-out behind the schedule. Gross area per surface, less the recorded openings, equals net fabric. Track = perimeter + around each opening + splits. Nothing here is an order quantity until the survey confirms the geometry.', 'QS-01');
+    add('quantities', function (page, P, no, total) {
+      head(P, F, m, no, 'Quantities', 'This is the set-out behind the schedule. Gross area per surface, less the recorded openings, equals net fabric. Track = perimeter + around each opening + splits. Nothing here is an order quantity until the survey confirms the geometry.', 'QS-01');
       var rows = [], T = rm.calc.totals;
       surfs.forEach(function (s) { var sc = calcS(s); if (!sc) return; rows.push([s.id.toUpperCase() + ' / ' + safe(s.label), mm(sc.len_mm) + ' x ' + mm(sc.h_mm), fmt(sc.gross_m2, 3), sc.openings.length ? sc.openings.map(function (o) { return o.label + ' ' + fmt(o.area_m2, 3) + (o.qty > 1 ? ' x' + o.qty : ''); }).join(' + ') : 'None', fmt(sc.net_m2, 3), fmt(sc.track.perimeter_m, 2) + ' + ' + fmt(sc.track.openings_m, 2) + (sc.track.split_m ? ' + ' + fmt(sc.track.split_m, 2) : '') + ' = ' + fmt(sc.track.total_m, 2), sc.n_panels + ' x ' + mm(sc.panel_w_mm), String(sc.n_cutouts || 0)]); });
       var tr = ['TOTAL / ' + surfs.length + ' surfaces', '', fmt(T.gross_m2, 3), fmt(T.openings_m2, 3) + ' total deduction', fmt(T.net_m2, 3), fmt(T.track_m, 2) + ' m', T.panels + ' panels', String(T.cutouts || 0)]; tr.__bold = true; rows.push(tr);
@@ -447,7 +451,7 @@
       foot(P, F, m, no, total, 'QS-01');
     });
     // DR-01 dimension register
-    add(function (page, P, no, total) {
+    add('register', function (page, P, no, total) {
       head(P, F, m, no, 'Dimension register and survey priorities', 'No dimension in this issue is site-verified. The tags show where each value came from and how it may be used.', 'DR-01');
       var rows = [];
       rows.push([rsrc, 'Room envelope', mm(Wr) + ' W x ' + mm(Dr) + ' D x ' + mm(Hr) + ' H', m.sources && m.sources.room || 'Client brief / survey app', 'Check substrate vs finished faces; confirm whether lining is included']);
@@ -462,7 +466,7 @@
       foot(P, F, m, no, total, 'DR-01');
     });
     // closing — remaining renders + source record
-    add(function (page, P, no, total) {
+    add('closing', function (page, P, no, total) {
       var rest = imgs.slice(2, 4);
       head(P, F, m, no, rest.length ? (m.scheme.altTitle || 'Further views') : 'Source record', rest.length ? (m.scheme.altBlurb || 'The remaining selected visualisations, kept for comparison.') : '', 'RETAINED COMPARISON');
       var bw = (PW - M * 2 - 24) / 2, bh = Math.min(bw * 0.56, PH * 0.42), iy0 = 170;
@@ -473,19 +477,19 @@
       foot(P, F, m, no, total, '');
     });
     // rear page — the full contact block, once (luxury rearPage, sonor-platform §43)
-    add(function (page, P, no, total) {
+    add('rearpage', function (page, P, no, total) {
       P.rect(0, 0, PW, PH, [22, 19, 24]);
       P.logo(M, M * 0.62 + 22, 30, CREAM); P.tracked('SONOR', M + 37, M * 0.62 + 28, 18, F.b, CREAM, 4.2);
       var ty = PH * 0.42; P.text('Smart homes, beautifully done.', M, ty, 22, F.l, GOLDL); P.line(M, ty + 62, PW - M, ty + 62, GOLD, 0.5, 0.45);
-      var cw = (PW - M * 2) / 2, rows = [[['NEW PROJECTS & PROPOSALS', 'projects@sonor.co.uk'], ['SERVICE & SUPPORT', 'service@sonor.co.uk']], [['TELEPHONE', '+44 7933 684 000'], ['WEB', 'sonor.co.uk']]];
+      var cw = (PW - M * 2) / 2, rows = [[['NEW PROJECTS & PROPOSALS', 'projects@sonor.co.uk'], ['SERVICE & SUPPORT', 'service@sonor.co.uk']], [['TELEPHONE', m.intl ? '+44 7933 684 000' : '07933 684 000'], ['WEB', 'sonor.co.uk']]];
       rows.forEach(function (r, ri) { r.forEach(function (c, ci) { var x = M + ci * cw, y = ty + 84 + ri * 46; P.tracked(c[0], x, y, 7, F.r, INFO, 1.8); P.text(c[1], x, y + 13, 13, F.b, CREAM); }); });
       P.text('Sonor Ltd  ·  Chester, England  ·  Trusted by homeowners across the North West & Wales', M, ty + 194, 8.5, F.r, INFO);
-      P.tracked('CEDIA MEMBER', M, PH - 46, 6, F.r, INFO, 1.2);
+      if (cedia) { var ch = 34, cwd = ch * (cedia.width / cedia.height); P.image(cedia, PW - M - cwd, PH - 40 - ch, cwd, ch); } else P.trackedRight('CEDIA MEMBER', PW - M, PH - 46, 6, F.r, INFO, 1.2);   // bottom right (Bryn 2026-10-22)
     });
 
     function finish() {
-      var total = sheets.length;
-      sheets.forEach(function (fn, i) { var page = doc.addPage([PW * SCALE, PH * SCALE]); if (SCALE !== 1) page.pushOperators(PL.pushGraphicsState(), PL.scale(SCALE, SCALE)); var P = mk(page, F); P.rect(0, 0, PW, PH, PAPER); fn(page, P, i + 1, total); if (SCALE !== 1) page.pushOperators(PL.popGraphicsState()); });
+      var total = m.pageTotal || sheets.length, start = m.pageStart || 1; m.pageCount = sheets.length;
+      sheets.forEach(function (fn, i) { var page = doc.addPage([PW * SCALE, PH * SCALE]); if (SCALE !== 1) page.pushOperators(PL.pushGraphicsState(), PL.scale(SCALE, SCALE)); var P = mk(page, F); P.rect(0, 0, PW, PH, PAPER); fn(page, P, start + i, total); if (SCALE !== 1) page.pushOperators(PL.popGraphicsState()); });
       doc.setTitle('Design & dimension pack - ' + (m.projectNo || '') + ' ' + (m.title || '') + ' ' + (m.rev || 'R1') + ' (' + (m.paper || 'A3') + ' ' + (LAND ? 'landscape' : 'portrait') + ')'); doc.setAuthor('Sonor Ltd');
       return doc.save();
     }

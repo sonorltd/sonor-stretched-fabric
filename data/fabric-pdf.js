@@ -25,6 +25,26 @@
   function fmt(v, dp) { return Number(v || 0).toLocaleString('en-GB', { maximumFractionDigits: dp == null ? 2 : dp, minimumFractionDigits: dp == null ? 0 : dp }); }
   function fit(F, s, size, w) { s = String(s == null ? '' : s); while (s.length > 3 && F.widthOfTextAtSize(s, size) > w) s = s.slice(0, -2).replace(/\s+$/, '') ; return s; }
 
+  // v0.4.1 — the two MAIN visualisations get a black matte frame (Bryn 2026-10-22: the rear render came back from the lab with a black border
+  // baked in — "add it to the front as well but not on the subsequent pages"). A baked-in dark border is trimmed off first so both mains carry
+  // the SAME matte drawn by the PDF, not one baked + one drawn.
+  async function trimmedImage(doc, url) {
+    try {
+      var r = await fetch(url); var blob = await r.blob(); var u = URL.createObjectURL(blob);
+      var img = await new Promise(function (res, rej) { var i = new Image(); i.onload = function () { res(i); }; i.onerror = rej; i.src = u; });
+      var cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight; var g = cv.getContext('2d'); g.drawImage(img, 0, 0); URL.revokeObjectURL(u);
+      var W = cv.width, H = cv.height, d = g.getImageData(0, 0, W, H).data;
+      var dark = function (x, y) { var i = (y * W + x) * 4; return d[i] + d[i + 1] + d[i + 2] < 120; };
+      var lineDark = function (fixed, vertical) { var n = 0, len = vertical ? H : W; for (var k = 0; k < len; k += 4) if (vertical ? dark(fixed, k) : dark(k, fixed)) n++; return n / (len / 4) > 0.92; };
+      var l = 0, rt = 0, t = 0, b = 0, lim = Math.floor(Math.min(W, H) * 0.12);
+      while (l < lim && lineDark(l, true)) l++; while (rt < lim && lineDark(W - 1 - rt, true)) rt++; while (t < lim && lineDark(t, false)) t++; while (b < lim && lineDark(H - 1 - b, false)) b++;
+      if (l + rt + t + b < 8) return null;   // no border to trim
+      var pad = 2, c2 = document.createElement('canvas'); c2.width = W - l - rt - pad * 2; c2.height = H - t - b - pad * 2; c2.getContext('2d').drawImage(cv, l + pad, t + pad, c2.width, c2.height, 0, 0, c2.width, c2.height);
+      var b64 = c2.toDataURL('image/jpeg', 0.9).split(',')[1], bin = atob(b64), out = new Uint8Array(bin.length); for (var k = 0; k < bin.length; k++) out[k] = bin.charCodeAt(k);
+      return await doc.embedJpg(out);
+    } catch (e) { console.warn('[fabric-pdf] trim failed', e && e.message); return null; }
+  }
+
   // ── shared bits ──────────────────────────────────────────────────────────
   function rule(P, F, lx, label, y) { P.tracked(label, lx.M, y, 6.5, F.r, lx.COL.MUT, 1.5); P.hline(lx.M, lx.A4.w - lx.M, y + 11, lx.COL.GOLD, 0.8, 0.75); return y + 26; }
   function table(P, F, lx, cols, rows, y, opts) {
@@ -77,7 +97,7 @@
       var per = 3;   // elevations per page
       var chunks = []; for (var i = 0; i < Math.max(1, surfaces.length); i += per) chunks.push(surfaces.slice(i, i + per));
       chunks.forEach(function (chunk, ci) {
-        pages.push({ label: r.name, draw: function (P, F, pageNo, TOTAL) {
+        pages.push({ key: 'rooms', label: r.name, draw: function (P, F, pageNo, TOTAL) {
           var M = lx.M, A4 = lx.A4, COL = lx.COL;
           lx.pageHead(P, F, String(r.name).toUpperCase() + (chunks.length > 1 ? ' · ' + (ci + 1) + '/' + chunks.length : ''), pageNo, TOTAL, DOC, { brand: 'large' });
           var y;
@@ -92,7 +112,7 @@
           chunk.forEach(function (s) {
             var sc = s.calc;
             P.text(s.surface.label + '  ·  ' + sc.n_panels + ' × ' + sc.panel_w_mm + ' mm' + (sc.n_openings ? '  ·  ' + sc.n_openings + ' opening' + (sc.n_openings > 1 ? 's' : '') : '') + (sc.n_cutouts ? '  ·  ' + sc.n_cutouts + ' cut-outs' : ''), M, y - 2, 8.5, F.b, COL.INK2);
-            var box = global.SonorFabricDraw.pdf(P, F, lx, s.surface, sc, { x: M + 28, top: y + 12, w: A4.w - M * 2 - 56, h: each - 40 });
+            var box = global.SonorFabricDraw.pdf(P, F, lx, s.surface, sc, { x: M + 28, top: y + 12, w: A4.w - M * 2 - 56, h: each - 40 });   // (wide sheets: the same stack, wider — two-across is B-572)
             y = box.bottom + 14;
           });
           if (!surfaces.length) P.text('No surfaces switched on for this room.', M, y, 9.5, F.r, COL.MUT);
@@ -101,7 +121,7 @@
       });
       // v0.3.0 — IN THE ROOM: the saved simulations, one per page (full-width picture in the house frame)
       (r.sims || []).forEach(function (sim, si) {
-        pages.push({ label: r.name, img: sim.src, draw: function (P, F, pageNo, TOTAL, imgs) {
+        pages.push({ key: 'sims', label: r.name, img: sim.src, draw: function (P, F, pageNo, TOTAL, imgs) {
           var M = lx.M, A4 = lx.A4, COL = lx.COL, img = imgs && imgs[sim.src];
           lx.pageHead(P, F, String(r.name).toUpperCase() + ' · IN THE ROOM', pageNo, TOTAL, DOC, { brand: 'large' });
           var y = lx.sectionHead(P, F, 'SIMULATION', r.name, m.blurbs.photos);
@@ -123,26 +143,41 @@
   function renderPages(m) {
     var lx = L(), list = (m.renders || []).filter(function (r) { return r.url; }), pages = [];
     if (!list.length) return pages;
-    var per = 2;
-    for (var i = 0; i < list.length; i += per) {
+    // v0.4.1 (Bryn 2026-10-22): the two MAIN views (hero + the first picture of the opposite view) go full page; everything after is alt views
+    // only, and the lights-off / daytime versions come last. Views are read from the captions (front / rear · off / daytime).
+    var isOff = function (r) { return /lights? off|lighting .*off|daytime|day,|all off/i.test(r.caption || ''); };
+    var viewOf = function (r) { return /rear|back/i.test(r.caption || '') ? 'rear' : (/front|feature/i.test(r.caption || '') ? 'front' : 'other'); };
+    var hero = list.find(function (r) { return r.hero; }) || list[0], mate = list.find(function (r) { return r !== hero && !isOff(r) && viewOf(r) !== viewOf(hero) && viewOf(r) !== 'other'; });
+    var mains = [hero].concat(mate ? [mate] : []), rest = list.filter(function (r) { return mains.indexOf(r) < 0; });
+    list = mains.concat(rest.filter(function (r) { return !isOff(r); })).concat(rest.filter(isOff));
+    // v0.4.0 (Bryn 2026-10-22: "give the 2 main images front and back full page, then the rest 2 per page") — the first two
+    // renders (hero first — the gallery order) each take a full page; everything after runs two per page.
+    // v0.4.1 (22:03) — "maybe just give every image a full page, lose the black stroke and use our usual thin gold one"
+    var chunks = list.map(function (r) { return [r]; });
+    chunks.forEach(function (chunk, idx) { var n = chunks.length;
       (function (chunk, idx, n) {
-        pages.push({ label: 'Visualisations', imgs: chunk.map(function (r) { return r.url; }), draw: function (P, F, pageNo, TOTAL, imgs) {
+        pages.push({ key: 'renders', label: 'Visualisations', main: chunk.length === 1, imgs: chunk.map(function (r) { return r.url; }), draw: function (P, F, pageNo, TOTAL, imgs) {
           var M = lx.M, A4 = lx.A4, COL = lx.COL, W = A4.w - M * 2;
           lx.pageHead(P, F, 'VISUALISATIONS' + (n > 1 ? ' · ' + (idx + 1) + '/' + n : ''), pageNo, TOTAL, DOC, { brand: 'large' });
           var y = idx === 0 ? lx.sectionHead(P, F, 'THE FINISHED ROOM', 'Visualisations', m.blurbs.renders) : 96;
           y = Math.max(y, idx === 0 ? 176 : 96);
-          var avail = A4.h - 80 - y, each = (avail - (chunk.length - 1) * 26) / chunk.length;
+          var avail = A4.h - 80 - y, each = chunk.length === 1 ? avail : (avail - (chunk.length - 1) * 26) / chunk.length;
+          if (A4.w > A4.h && chunk.length === 2) {   // v0.4.1 — wide sheet: the pair sits side by side
+            var cw2 = (W - 24) / 2, y0 = y;
+            chunk.forEach(function (r, ci) { var img = imgs && imgs[r.url], x0 = M + ci * (cw2 + 24); if (img) { var dw = cw2, dh = img.height * (cw2 / img.width), maxH = avail - 30; if (dh > maxH) { dh = maxH; dw = img.width * (maxH / img.height); } var ix = x0 + (cw2 - dw) / 2; P.image(img, ix, y0, dw, dh, 1); P.rectB(ix, y0, dw, dh, COL.GOLD, 0.8); if (r.caption) P.text(fit(F.r, r.caption, 8.5, cw2), x0, y0 + dh + 12, 8.5, F.r, COL.MUT); } });
+            lx.pageFoot(P, F); return;
+          }
           chunk.forEach(function (r) {
             var img = imgs && imgs[r.url];
-            if (img) { var dw = W, dh = img.height * (W / img.width), maxH = each - 22; if (dh > maxH) { dh = maxH; dw = img.width * (maxH / img.height); } var ix = M + (W - dw) / 2; P.image(img, ix, y, dw, dh, 1); P.rectB(ix, y, dw, dh, COL.GOLD, 0.8); y += dh + 12; }
+            if (img) { var matte = 0; /* black matte retired 22:03 — the thin gold frame only */ var dw = W - matte * 2, dh = img.height * (dw / img.width), maxH = each - 22 - matte * 2; if (dh > maxH) { dh = maxH; dw = img.width * (maxH / img.height); } var ix = M + (W - dw) / 2; if (matte) { P.rect(ix - matte, y, dw + matte * 2, dh + matte * 2, [16, 16, 16], 1); P.image(img, ix, y + matte, dw, dh, 1); P.rectB(ix - matte, y, dw + matte * 2, dh + matte * 2, COL.GOLD, 0.8); dh += matte * 2; } else { P.image(img, ix, y, dw, dh, 1); P.rectB(ix, y, dw, dh, COL.GOLD, 0.8); } y += dh + 12; }
             else { P.rect(M, y, W, each - 22, [234, 229, 219], 1); y += each - 10; }
             if (r.caption) P.text(fit(F.r, r.caption, 8.5, W), M, y, 8.5, F.r, COL.MUT);
             y += 14;
           });
           lx.pageFoot(P, F);
         } });
-      })(list.slice(i, i + per), i / per, Math.ceil(list.length / per));
-    }
+      })(chunk, idx, n);
+    });
     return pages;
   }
 
@@ -194,7 +229,7 @@
       });
       y = rule(P, F, lx, 'HOW IT GOES TOGETHER', y);
       ['Perimeter track is fixed to the substrate around every surface and around every opening.', 'Acoustic infill (where specified) is fitted inside the track depth, flush with the track face.', 'Fabric is cut with a tensioning allowance on every edge, stretched and tucked into the track — no visible fixings, no seams except at split tracks.', 'Device cut-outs are formed on site at the installed positions of speakers, lights, keypads and grilles.'].forEach(function (t) {
-        P.dot(M + 3, y - 4, 2.2, COL.GOLD); lx.wrap(t, F.r, 10, A4.w - M * 2 - 18).forEach(function (ln, li) { P.text(ln, M + 14, y - 9 + li * 13.5, 10, F.r, COL.INK2); if (li) y += 13.5; }); y += 20;
+        P.dot(M + 3, y - 4, 2.2, COL.GOLD); lx.wrap(t, F.r, 10, (lx.TW ? lx.TW() : A4.w - M * 2) - 18).forEach(function (ln, li) { P.text(ln, M + 14, y - 9 + li * 13.5, 10, F.r, COL.INK2); if (li) y += 13.5; }); y += 20;
       });
       lx.pageFoot(P, F);
     };
@@ -227,7 +262,7 @@
     var per = 26;
     for (var i = 0; i < Math.max(1, rows.length); i += per) {
       (function (chunk, idx, n) {
-        pages.push({ label: 'Cut list', draw: function (P, F, pageNo, TOTAL) {
+        pages.push({ key: 'cutlist', theme: 'neutral', label: 'Cut list', draw: function (P, F, pageNo, TOTAL) {
           var M = lx.M, A4 = lx.A4, W = A4.w - M * 2;
           lx.pageHead(P, F, 'CUT LIST' + (n > 1 ? ' · ' + (idx + 1) + '/' + n : ''), pageNo, TOTAL, 'CUT LIST & BOM', { brand: 'large' });
           var y = idx === 0 ? lx.sectionHead(P, F, 'INTERNAL · NOT FOR THE CLIENT', 'Cut list', 'One line per panel: finished size, the cut size with the tensioning allowance on every edge, and the roll length each panel consumes. Waste is added on the order quantity, not per panel.') : 96;
@@ -277,7 +312,7 @@
       lx.pageHead(P, F, 'THE DETAIL', pageNo, TOTAL, DOC, { brand: 'large' });
       P.tracked('THE DETAIL', M, 92, 8.5, F.r, COL.GOLD, 2.6);
       var y = 118;
-      (m.termsLines || []).forEach(function (t) { P.dot(M + 3, y - 3, 2.2, COL.GOLD); var lines = lx.wrap(t, F.r, 10.5, A4.w - M * 2 - 18); lines.forEach(function (ln, li) { P.text(ln, M + 14, y - 9 + li * 14.5, 10.5, F.r, COL.INK2); }); y += lines.length * 14.5 + 12; });
+      (m.termsLines || []).forEach(function (t) { P.dot(M + 3, y - 3, 2.2, COL.GOLD); var lines = lx.wrap(t, F.r, 10.5, (lx.TW ? lx.TW() : A4.w - M * 2) - 18); lines.forEach(function (ln, li) { P.text(ln, M + 14, y - 9 + li * 14.5, 10.5, F.r, COL.INK2); }); y += lines.length * 14.5 + 12; });
       if (m.quoteRef) { P.hline(M, A4.w - M, A4.h - 130, COL.LINE, 0.8); P.tracked('PROPOSAL REFERENCE', M, A4.h - 116, 6.5, F.r, COL.MUT, 1.5); P.text(m.quoteRef, M, A4.h - 106, 14, F.b, COL.INK); P.text('Please quote this reference in any correspondence about this proposal.', M, A4.h - 86, 8.5, F.r, COL.MUT); if (m.dateText) P.right(m.dateText, A4.w - M, A4.h - 112, 9.5, F.r, COL.MUT); }
       lx.pageFoot(P, F);
     };
@@ -302,25 +337,32 @@
 
     // v0.3.0 — picture pages (simulations + lab renders) declare the images they need; loaded once here
     var pics = {};
-    var sections = [{ label: 'Introduction', draw: secIntro(m) }].concat(renderPages(m)).concat(roomPages(m)).concat([
-      { label: 'Fabric & colour', draw: secFabric(m, imgs) }, { label: 'The system', draw: secSystem(m) }, { label: 'Schedule', draw: secSchedule(m) }
+    var sections = [{ key: 'intro', label: 'Introduction', draw: secIntro(m) }].concat(renderPages(m)).concat(roomPages(m)).concat([
+      { key: 'fabric', label: 'Fabric & colour', draw: secFabric(m, imgs) }, { key: 'system', label: 'The system', draw: secSystem(m) }, { key: 'schedule', label: 'Schedule', draw: secSchedule(m) }
     ]);
-    if (m.internal) sections = sections.concat(cutPages(m)).concat([{ label: 'BOM & WeQuote', draw: secBom(m) }]);
-    sections.push({ label: 'The detail', draw: secDetail(m) });
+    if (m.internal || (m.sections && (m.sections.indexOf('cutlist') >= 0 || m.sections.indexOf('bom') >= 0))) sections = sections.concat(cutPages(m)).concat([{ key: 'bom', theme: 'neutral', label: 'BOM & WeQuote', draw: secBom(m) }]);
+    sections.push({ key: 'detail', label: 'The detail', draw: secDetail(m) });
     sections = sections.filter(function (s) { return s.draw; });
+    // v0.4.0 — the combined export (FabricApp.exportRun) picks sections by key; `sections` = the ticked keys, `part` = 'a' (before the
+    // drawing sheets) | 'b' (after them: cut list · BOM · the detail); pageStart / pageTotal keep the numbering continuous across the parts
+    if (Array.isArray(m.sections)) sections = sections.filter(function (s) { return m.sections.indexOf(s.key) >= 0; });
+    if (m.part === 'a') sections = sections.filter(function (s) { return ['cutlist', 'bom', 'detail'].indexOf(s.key) < 0; });
+    if (m.part === 'b') sections = sections.filter(function (s) { return ['cutlist', 'bom', 'detail'].indexOf(s.key) >= 0; });
     m.sectionList = sections.map(function (s) { return s.label; }).filter(function (v, i, a) { return a.indexOf(v) === i; });
     for (var si = 0; si < sections.length; si++) { var need = (sections[si].imgs || []).concat(sections[si].img ? [sections[si].img] : []); for (var ni = 0; ni < need.length; ni++) { if (!pics[need[ni]]) { try { pics[need[ni]] = await lx.loadImage(doc, need[ni]); } catch (e) { console.warn('[fabric-pdf] picture', e && e.message); } } } }
 
-    var TOTAL = sections.length + 1;
-    var p1 = doc.addPage([lx.A4.w, lx.A4.h]);
+    for (var mi = 0; mi < sections.length; mi++) { if (sections[mi].key === 'renders' && sections[mi].imgs && m.trimBorders !== false) { /* any lab render with a baked-in dark border is trimmed (the rear R2 main had one) */ for (var mj = 0; mj < sections[mi].imgs.length; mj++) { var tu = sections[mi].imgs[mj]; var ti = await trimmedImage(doc, tu); if (ti) pics[tu] = ti; } } }
+    var TOTAL = m.pageTotal || (sections.length + 1), START = m.pageStart || 1, withCover = m.part !== 'b' && !(Array.isArray(m.sections) && m.sections.indexOf('cover') < 0);
+    m.pageCount = sections.length + (withCover ? 1 : 0);
+    if (withCover) { var p1 = doc.addPage([lx.A4.w, lx.A4.h]);
     var cw3 = (lx.A4.w - lx.M * 2) / 3 - 18;
     lx.cover(lx.mk(p1, doc), F, {
       hero: hero, fadeImg: fadeImg, cediaImg: cedia, brandLarge: true, airy: true, footLogos: [],
       eyebrow: m.internal ? 'STRETCHED FABRIC · CUT LIST & BOM' : DOC_LABEL,
-      title: m.title || 'Your home', subtitle: (m.internal ? 'Internal working document' : 'Stretched fabric walls & ceilings') + ' · ' + m.rooms.length + ' room' + (m.rooms.length === 1 ? '' : 's'),
+      title: m.title || 'Your home', subtitle: m.internal ? 'Internal working document' : 'Stretched fabric walls & ceilings',   // (room count dropped — Bryn 2026-10-22)
       info: [['PREPARED FOR', fit(F.b, m.client || '—', 12.5, cw3)], ['PROJECT', fit(F.b, m.project || '—', 12.5, cw3)], ['REFERENCE', m.quoteRef || '—']]
-    });
-    sections.forEach(function (s, idx) { var pg = doc.addPage([lx.A4.w, lx.A4.h]); var P = lx.mk(pg, doc); P.rect(0, 0, lx.A4.w, lx.A4.h, lx.COL.CREAM); s.draw(P, F, idx + 2, TOTAL, pics); });
+    }); }
+    sections.forEach(function (s, idx) { lx.theme(s.theme || (m.internal ? 'neutral' : 'luxury')); DOC = s.theme === 'neutral' ? 'CUT LIST & BOM' : (m.internal ? 'CUT LIST & BOM' : DOC_LABEL); var pg = doc.addPage([lx.A4.w, lx.A4.h]); var P = lx.mk(pg, doc); P.rect(0, 0, lx.A4.w, lx.A4.h, lx.COL.CREAM); s.draw(P, F, START + idx + (withCover ? 1 : 0), TOTAL, pics); });
     var bytes = await doc.save();
     lx.theme('luxury');
     if (m.returnBytes) return bytes;

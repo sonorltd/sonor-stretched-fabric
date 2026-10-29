@@ -21,6 +21,15 @@
   'use strict';
 
   var A4 = { w: 595.28, h: 841.89 };
+  // v1.5.0 (2026-10-22, Bryn: "make it proper pages" — the whole Stretched Fabric pack as A3 landscape, not A4 spreads): the chrome can
+  // now be told the SHEET it is drawing on. sheet({ w, h }) mutates the one A4 object every painter closes over, so pageHead / pageFoot /
+  // cover / rearPage / sectionHead and every consumer that reads lx.A4 at draw time lay out on that sheet; sheet() with no args returns
+  // the current size; sheet('A4') restores the default. A3 landscape (1190.55 × 841.89) shares A4 portrait's HEIGHT, so every absolute
+  // y in the chrome (cover title block, info row, foot) still lands — only widths change. Prose keeps a readable measure: TW() caps a
+  // paragraph width at 640 pt on wide sheets (sectionHead uses it; consumers should wrap prose with lx.TW(), tables may span A4.w − 2M).
+  var SHEETS = { A4: { w: 595.28, h: 841.89 }, 'A4-landscape': { w: 841.89, h: 595.28 }, A3: { w: 841.89, h: 1190.55 }, 'A3-landscape': { w: 1190.55, h: 841.89 } };
+  function sheet(opts) { if (opts == null) return { w: A4.w, h: A4.h }; var sz = typeof opts === 'string' ? SHEETS[opts] : opts; if (sz && sz.w && sz.h) { A4.w = sz.w; A4.h = sz.h; } return { w: A4.w, h: A4.h }; }
+  function TW() { return Math.min(A4.w - M * 2, 640); }
   var M = 48;
   var COL = {
     GOLD: [173, 153, 120], GOLDL: [200, 180, 142], GDEEP: [140, 116, 60], PUR: [128, 88, 161],
@@ -322,12 +331,13 @@
     P.hline(M, A4.w - M, ty + 62, COL.GOLD, 0.5, 0.45);
     var L = opts.labels || {}, cw = (A4.w - M * 2) / 2, rows = [
       [[L.new || 'NEW PROJECTS & PROPOSALS', opts.email_new || 'projects@sonor.co.uk'], [L.service || 'SERVICE & SUPPORT', opts.email_service || 'service@sonor.co.uk']],
-      [[L.phone || 'TELEPHONE', opts.phone || '+44 7933 684 000'], [L.web || 'WEB', opts.web || 'sonor.co.uk']]
+      [[L.phone || 'TELEPHONE', opts.phone || (opts.intl ? '+44 7933 684 000' : '07933 684 000')], [L.web || 'WEB', opts.web || 'sonor.co.uk']]   // v1.5.1 — UK format by default; +44 only on foreign-language proposals (opts.intl)
     ];
     rows.forEach(function (r, ri) { r.forEach(function (c, ci) { var x = M + ci * cw, y = ty + 84 + ri * 46; P.tracked(String(c[0]).toUpperCase(), x, y, 7, F.r, COL.INFO, 1.8); P.text(c[1], x, y + 13, 13, F.b, COL.CREAM); }); });
     P.text(opts.company || 'Sonor Ltd  ·  Chester, England  ·  Trusted by homeowners across the North West & Wales', M, ty + 194, 8.5, F.r, COL.INFO);
-    if (opts.cediaImg) { var ch = (opts.cediaImg.width / opts.cediaImg.height) < 3 ? 13 : 9; var cwd = ch * (opts.cediaImg.width / opts.cediaImg.height); P.image(opts.cediaImg, M, A4.h - 40 - ch, cwd, ch, 0.92); }
-    else P.tracked('CEDIA MEMBER', M, A4.h - 46, 6, F.r, COL.INFO, 1.2);
+    // v1.5.1 (2026-10-22, Bryn): CEDIA member mark bottom RIGHT of the rear page, a proper size
+    if (opts.cediaImg) { var ch = (opts.cediaImg.width / opts.cediaImg.height) < 3 ? 34 : 22; var cwd = ch * (opts.cediaImg.width / opts.cediaImg.height); P.image(opts.cediaImg, A4.w - M - cwd, A4.h - 40 - ch, cwd, ch, 0.95); }
+    else P.trackedRight('CEDIA MEMBER', A4.w - M, A4.h - 46, 6, F.r, COL.INFO, 1.2);
   }
 
   // ── labelled spec rows (the p2/p4 pattern: LABEL / bold value / divider) ──
@@ -353,7 +363,7 @@
     P.text(title || '', M - 1, 106, 26, F.b, COL.INK);
     var y = 148;
     if (note) {
-      wrap(note, F.r, 10.5, A4.w - M * 2).slice(0, 4).forEach(function (ln, i) {
+      wrap(note, F.r, 10.5, TW()).slice(0, 4).forEach(function (ln, i) {
         P.text(ln, M, 142 + i * 14, 10.5, F.r, COL.INK2); y = 142 + (i + 1) * 14 + 6;
       });
     }
@@ -361,7 +371,7 @@
   }
 
   global.SonorPdfLuxury = {
-    __version: '1.4.0', theme: theme, THEMES: THEMES, footerMode: footerMode, rearPage: rearPage,
+    __version: '1.5.1', sheet: sheet, SHEETS: SHEETS, TW: TW, theme: theme, THEMES: THEMES, footerMode: footerMode, rearPage: rearPage,
     A4: A4, M: M, COL: COL, HOUSE: HOUSE, WA: WA,
     col: col, hexRgb: hexRgb, fadePngDataUrl: fadePngDataUrl,
     fetchBytes: fetchBytes, loadImage: loadImage,
