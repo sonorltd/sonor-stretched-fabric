@@ -325,10 +325,10 @@
     lx.theme(m.internal ? 'neutral' : 'luxury');
     DOC = m.internal ? 'CUT LIST & BOM' : DOC_LABEL;   // PDF convention 2026-10-12: cream for the client proposal, neutral for working documents
     var F = await lx.makeFonts(doc, BASE);
-    var hero = null, cedia = null, fadeImg = null;
+    var hero = null, cedia = null, fadeImg = null, heroArt = false;
     var heroR = (m.renders || []).find(function (r) { return r.hero && r.url; });   // v0.3.0: design_renders[].hero is the project cover (platform rule)
     if (heroR) { try { hero = await lx.loadImage(doc, heroR.url); } catch (e) { hero = null; } }
-    if (!hero) { try { hero = await lx.loadImage(doc, BASE + 'fabric-cover.jpg'); } catch (e) { try { hero = await lx.loadImage(doc, BASE + 'contract-hero.jpg'); } catch (e2) {} } } // B-567: own cover (Branding - CORE/PDF-COVERS/fabric.jpg via sync-pdf-covers), SC hero as fallback
+    if (!hero) { try { hero = await lx.loadCoverArt(doc, BASE + 'fabric-cover.jpg'); heroArt = true; } catch (e) { try { hero = await lx.loadCoverArt(doc, BASE + 'contract-hero.jpg'); heroArt = true; } catch (e2) {} } }   // cover art set (2026-11-01): the house art takes the art layout; a ★ project render keeps the photo layout // B-567: own cover (Branding - CORE/PDF-COVERS/fabric.jpg via sync-pdf-covers), SC hero as fallback
     try { cedia = await lx.loadImage(doc, BASE + 'cedia-member-stacked.png'); } catch (e) {}
     try { var fd = lx.fadePngDataUrl(); if (fd) fadeImg = await doc.embedPng(await lx.fetchBytes(fd)); } catch (e) {}
     // swatch images (colour card photos when the Library files them)
@@ -357,7 +357,7 @@
     if (withCover) { var p1 = doc.addPage([lx.A4.w, lx.A4.h]);
     var cw3 = (lx.A4.w - lx.M * 2) / 3 - 18;
     lx.cover(lx.mk(p1, doc), F, {
-      hero: hero, fadeImg: fadeImg, cediaImg: cedia, brandLarge: true, airy: true, footLogos: [],
+      layout: heroArt ? 'art' : undefined, hero: hero, fadeImg: fadeImg, cediaImg: cedia, brandLarge: true, airy: true, footLogos: [],
       eyebrow: m.internal ? 'STRETCHED FABRIC · CUT LIST & BOM' : DOC_LABEL,
       title: m.title || 'Your home', subtitle: m.internal ? 'Internal working document' : 'Stretched fabric walls & ceilings',   // (room count dropped — Bryn 2026-10-22)
       info: [['PREPARED FOR', fit(F.b, m.client || '—', 12.5, cw3)], ['PROJECT', fit(F.b, m.project || '—', 12.5, cw3)], ['REFERENCE', m.quoteRef || '—']]
