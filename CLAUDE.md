@@ -21,7 +21,7 @@
 > **Spine version: 1.3** (SONOR-APP-SPINE.md — SonorShell-mounted like Cinema Aesthetic / Seating / Lighting Design; declared at birth 2026-10-16)
 > Inherits: `../CLAUDE.md` (master brand rules + cross-project references)
 > Brand source: `../Branding - CORE/brand-core.xml`
-> Repo: `sonor-stretched-fabric` · Pages: https://sonorltd.github.io/sonor-stretched-fabric/
+> Repo: `sonor-stretched-fabric` · Pages: https://apps.sonor.co.uk/sonor-stretched-fabric/
 
 ## What this is
 Client-facing **stretched-fabric calc + design configurator** — walls and ceilings finished in
@@ -148,3 +148,5 @@ calc result; nothing is dragged or stored as geometry beyond mm sizes.
   track and polyester infill to WeQuote products when they exist (WQ-PRODUCTS-NEEDED).
 - A `ceiling_height_mm` home on `projects.metadata` (Takeoffs / Survey could write it) so heights
   stop being provisional.
+
+- 2026-11-01 — links → apps.sonor.co.uk (github.io retired)
